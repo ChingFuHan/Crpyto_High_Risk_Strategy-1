@@ -30,6 +30,7 @@ logs/*.log
 data/*.csv
 data/*.pkl
 data/*.h5
+data/history/
 data_cache/
 
 # Misc
