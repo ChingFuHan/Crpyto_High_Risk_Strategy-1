@@ -19,6 +19,7 @@ Usage (via run_backtest.py):
 """
 
 import os
+import re
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass, field
@@ -35,6 +36,8 @@ class BacktestConfig:
     initial_capital: float = 500.0
     max_positions: int = 5
     fee_rate: float = 0.0004            # 0.04 % taker per side
+    fixed_leverage: Optional[int] = None
+    verbose: bool = True
 
     # Leverage tiers: (min_score, leverage)  — checked high→low
     leverage_tiers: list = field(default_factory=lambda: [
@@ -62,6 +65,8 @@ class BacktestConfig:
 
     # ── position sizing ──────────────────────────────────────────────────
     risk_per_trade: float = 0.15        # 15 % of capital per slot
+    min_margin: float = 5.0
+    capital_floor: float = 10.0
 
     # ── exit parameters ───────────────────────────────────────────────────
     sl_atr_mult: dict = field(default_factory=lambda: {
@@ -79,6 +84,10 @@ class BacktestConfig:
 
     # ── cooldown ──────────────────────────────────────────────────────────
     cooldown_bars: int = 5
+
+    # ── universe filter ───────────────────────────────────────────────────
+    require_standard_symbols: bool = False
+    exclude_symbols: List[str] = field(default_factory=list)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -124,6 +133,10 @@ class Backtester:
 
     def __init__(self, config: BacktestConfig | None = None):
         self.cfg = config or BacktestConfig()
+        self._standard_symbol_re = re.compile(r"^[A-Z0-9]+USDT$")
+        self._reset_state()
+
+    def _reset_state(self):
         self.capital: float = self.cfg.initial_capital
         self.positions: Dict[str, Position] = {}
         self.trades: List[Trade] = []
@@ -140,6 +153,39 @@ class Backtester:
     @staticmethod
     def _ema(s: pd.Series, span: int) -> pd.Series:
         return s.ewm(span=span, adjust=False).mean()
+
+    def _is_symbol_enabled(self, symbol: str) -> bool:
+        if symbol in set(self.cfg.exclude_symbols):
+            return False
+        if self.cfg.require_standard_symbols and not self._standard_symbol_re.match(symbol):
+            return False
+        return True
+
+    def _build_entry_mask(self, df: pd.DataFrame) -> pd.Series:
+        c = self.cfg
+        return (
+            df["trend_up"]
+            & df["rsi"].between(c.rsi_entry_min, c.rsi_entry_max)
+            & (df["vol_r"] >= c.volume_mult)
+            & (df["cl"].astype(float) > df["prev_hi"])
+            & (df["cr"] >= c.min_close_ratio)
+        ).fillna(False)
+
+    def _entry_signal(self, data: dict, idx: int) -> bool:
+        prev_hi = data["prev_hi"][idx]
+        rsi = data["rsi"][idx]
+        vol_r = data["vol_r"][idx]
+        close_ratio = data["cr"][idx]
+        close_price = data["cl"][idx]
+        if np.isnan(prev_hi) or np.isnan(rsi) or np.isnan(vol_r) or np.isnan(close_ratio):
+            return False
+        return bool(
+            data["trend_up"][idx]
+            and self.cfg.rsi_entry_min <= rsi <= self.cfg.rsi_entry_max
+            and vol_r >= self.cfg.volume_mult
+            and close_price > prev_hi
+            and close_ratio >= self.cfg.min_close_ratio
+        )
 
     def _compute(self, df: pd.DataFrame) -> pd.DataFrame:
         """Return *df* enriched with indicators, entry flag, and score."""
@@ -188,15 +234,12 @@ class Backtester:
         df["roc"] = cl.pct_change(10)
 
         # ── entry signal (vectorised boolean) ─────────────────────────────
-        df["entry"] = (
+        df["trend_up"] = (
             (cl > df["ema_f"])
             & (df["ema_f"] > df["ema_m"])
             & (df["ema_m"] > df["ema_s"])
-            & df["rsi"].between(c.rsi_entry_min, c.rsi_entry_max)
-            & (df["vol_r"] >= c.volume_mult)
-            & (cl > df["prev_hi"])
-            & (df["cr"] >= c.min_close_ratio)
         ).fillna(False)
+        df["entry"] = self._build_entry_mask(df)
 
         # ── momentum score (0–1) ─────────────────────────────────────────
         trend = ((df["ema_f"] - df["ema_s"]) / df["ema_s"]).clip(0, 0.30)
@@ -216,11 +259,11 @@ class Backtester:
         df["regime_bull"] = cl > ema
         return df
 
-        return df
-
     # ── leverage ──────────────────────────────────────────────────────────
 
     def _lev(self, score: float) -> int:
+        if self.cfg.fixed_leverage is not None:
+            return self.cfg.fixed_leverage
         for thresh, lev in self.cfg.leverage_tiers:
             if score >= thresh:
                 return lev
@@ -230,12 +273,12 @@ class Backtester:
 
     def _open(self, sym: str, price: float, atr: float, score: float, da: str):
         slots = self.cfg.max_positions - len(self.positions)
-        if slots <= 0 or self.capital < 10:
+        if slots <= 0 or self.capital < self.cfg.capital_floor:
             return
         lev = self._lev(score)
         margin = round(min(self.capital * self.cfg.risk_per_trade,
                            self.capital / slots), 4)
-        if margin < 5:
+        if margin < self.cfg.min_margin:
             return
 
         notional = margin * lev
@@ -281,14 +324,14 @@ class Backtester:
 
     # ── main simulation ──────────────────────────────────────────────────
 
-    def run(self, data_dir: str = "data/history/1h") -> dict:
-        """Load data, simulate bar-by-bar, return performance report."""
-
-        # 1 — load & prepare --------------------------------------------------
-        print("Loading data …")
+    def prepare_data(self, data_dir: str = "data/history/1h") -> dict:
+        """Load market data and pre-compute reusable indicators."""
+        if self.cfg.verbose:
+            print("Loading data …")
         csvs = sorted(Path(data_dir).glob("*.csv"))
         if not csvs:
-            print(f"  ✗ no CSV files in {data_dir}")
+            if self.cfg.verbose:
+                print(f"  ✗ no CSV files in {data_dir}")
             return {"error": "no data"}
 
         sym_data: Dict[str, dict] = {}
@@ -321,32 +364,68 @@ class Backtester:
                 "lo":    df["lo"].values.astype(float),
                 "atr":   df["atr"].values.astype(float),
                 "rsi":   df["rsi"].values.astype(float),
-                "entry": df["entry"].values,
+                "vol_r": df["vol_r"].values.astype(float),
+                "prev_hi": df["prev_hi"].values.astype(float),
+                "cr": df["cr"].values.astype(float),
+                "trend_up": df["trend_up"].values.astype(bool),
                 "score": df["score"].values.astype(float),
                 "n":     len(df),
             }
 
         n_sym = len(sym_data)
         if n_sym == 0:
-            print("  ✗ no symbols with enough data")
+            if self.cfg.verbose:
+                print("  ✗ no symbols with enough data")
             return {"error": "insufficient data"}
 
-        has_regime = len(btc_regime) > 0
-        print(f"  {n_sym} symbols loaded")
-        print(f"  BTC regime filter: {'ON' if has_regime else 'OFF (no BTCUSDT data)'}")
-
-        # 2 — unified timeline ------------------------------------------------
         all_da = set()
         for d in sym_data.values():
             all_da.update(d["da"])
         timeline = sorted(all_da)
-        print(f"  period : {timeline[0]} → {timeline[-1]}")
-        print(f"  bars   : {len(timeline):,}")
-        print(f"  capital: {self.capital} USDT")
-        print("-" * 60)
+        return {
+            "symbols": sym_data,
+            "btc_regime": btc_regime,
+            "timeline": timeline,
+        }
+
+    def run(self, data_dir: str = "data/history/1h") -> dict:
+        """Load data, simulate bar-by-bar, return performance report."""
+        prepared = self.prepare_data(data_dir)
+        if "error" in prepared:
+            return prepared
+        return self.run_prepared(prepared)
+
+    def run_prepared(self, prepared: dict) -> dict:
+        """Run simulation using a pre-computed market snapshot."""
+        if "error" in prepared:
+            return prepared
+
+        self._reset_state()
+        sym_data = prepared["symbols"]
+        btc_regime = prepared["btc_regime"]
+        timeline = prepared["timeline"]
+
+        enabled_symbols = {
+            sym for sym in sym_data
+            if self._is_symbol_enabled(sym)
+        }
+        n_sym = len(enabled_symbols)
+        if n_sym == 0:
+            if self.cfg.verbose:
+                print("  ✗ no enabled symbols after filtering")
+            return {"error": "no enabled symbols"}
+
+        has_regime = len(btc_regime) > 0
+        if self.cfg.verbose:
+            print(f"  {n_sym} symbols loaded")
+            print(f"  BTC regime filter: {'ON' if has_regime else 'OFF (no BTCUSDT data)'}")
+            print(f"  period : {timeline[0]} → {timeline[-1]}")
+            print(f"  bars   : {len(timeline):,}")
+            print(f"  capital: {self.capital} USDT")
+            print("-" * 60)
 
         # 3 — pointers
-        ptrs = {s: 0 for s in sym_data}
+        ptrs = {s: 0 for s in enabled_symbols}
 
         # 4 — bar-by-bar simulation -------------------------------------------
         n_bars = len(timeline)
@@ -354,7 +433,8 @@ class Backtester:
 
             # advance pointers & gather active bars
             active: Dict[str, int] = {}
-            for sym, d in sym_data.items():
+            for sym in enabled_symbols:
+                d = sym_data[sym]
                 p = ptrs[sym]
                 while p < d["n"] and d["da"][p] < t:
                     p += 1
@@ -446,7 +526,7 @@ class Backtester:
             allow_entry = (
                 not self.paused
                 and len(self.positions) < self.cfg.max_positions
-                and self.capital > 10
+                and self.capital >= self.cfg.capital_floor
             )
             # BTC regime check: only open in BTC uptrend (or when no data)
             if allow_entry and has_regime:
@@ -458,20 +538,20 @@ class Backtester:
                     if sym in self.positions or sym in self.cooldowns:
                         continue
                     d = sym_data[sym]
-                    if d["entry"][idx]:
+                    if self._entry_signal(d, idx):
                         cands.append((sym, idx, d["score"][idx]))
                 cands.sort(key=lambda x: x[2], reverse=True)
                 slots = self.cfg.max_positions - len(self.positions)
                 for sym, idx, sc in cands[:slots]:
                     d = sym_data[sym]
                     self._open(sym, d["cl"][idx], d["atr"][idx], sc, t)
-                    if self.capital < 10:
+                    if self.capital < self.cfg.capital_floor:
                         break
 
             # ── record equity curve ───────────────────────────────────────
             if bi % 100 == 0:
                 self.equity_curve.append({"da": t, "equity": round(equity, 2)})
-            if bi % 5000 == 0 and bi:
+            if self.cfg.verbose and bi % 5000 == 0 and bi:
                 flag = " [PAUSED]" if self.paused else ""
                 lk = f" locked={self.locked_profit:.0f}" if self.locked_profit else ""
                 print(f"  bar {bi:>8,}/{n_bars:,}  "
@@ -541,15 +621,15 @@ class Backtester:
 
     # ── persist results ───────────────────────────────────────────────────
 
-    def save_results(self, out_dir: str = "data"):
+    def save_results(self, out_dir: str = "data", prefix: str = "backtest"):
         os.makedirs(out_dir, exist_ok=True)
         if self.trades:
             df = pd.DataFrame([vars(t) for t in self.trades])
-            p = os.path.join(out_dir, "backtest_trades.csv")
+            p = os.path.join(out_dir, f"{prefix}_trades.csv")
             df.to_csv(p, index=False)
             print(f"  Trades → {p}  ({len(self.trades)} rows)")
         if self.equity_curve:
             df = pd.DataFrame(self.equity_curve)
-            p = os.path.join(out_dir, "backtest_equity.csv")
+            p = os.path.join(out_dir, f"{prefix}_equity.csv")
             df.to_csv(p, index=False)
             print(f"  Equity → {p}  ({len(self.equity_curve)} points)")

@@ -1,0 +1,210 @@
+[
+  {
+    "initial_capital": 500.0,
+    "final_capital": 941.07,
+    "locked_profit": 931.17,
+    "trading_capital": 9.9,
+    "total_pnl": 441.07,
+    "return_pct": 88.21,
+    "total_trades": 8346,
+    "wins": 5117,
+    "losses": 3229,
+    "win_rate": 61.31,
+    "avg_win": 4.07,
+    "avg_loss": -6.21,
+    "profit_factor": 1.04,
+    "max_drawdown_pct": 28.21,
+    "avg_hold_bars": 15.3,
+    "exit_reasons": {
+      "trailing_stop": 5045,
+      "stop_loss": 3138,
+      "rsi_exhaustion": 24,
+      "max_hold": 101,
+      "equity_stop": 38
+    },
+    "leverage_dist": {
+      "3x": 8346
+    },
+    "top_symbols_pnl": {
+      "RLCUSDT": 246.28,
+      "AXSUSDT": 243.11,
+      "SKLUSDT": 241.82,
+      "CHZUSDT": 237.94,
+      "QTUMUSDT": 208.3,
+      "IOSTUSDT": 194.69,
+      "CHRUSDT": 145.57,
+      "MANAUSDT": 143.22,
+      "AVAXUSDT": 132.21,
+      "SANDUSDT": 128.42
+    },
+    "worst_symbols_pnl": {
+      "IOTAUSDT": -205.82,
+      "ENJUSDT": -202.72,
+      "ZECUSDT": -191.08,
+      "XMRUSDT": -183.41,
+      "DOTUSDT": -182.33
+    },
+    "scenario": "faster_trail",
+    "sl_atr_mult_3x": 3.0,
+    "trailing_act_pct": 0.04,
+    "trailing_dist_pct": 0.02,
+    "max_hold_bars": 96,
+    "elapsed_sec": 304.69
+  },
+  {
+    "initial_capital": 500.0,
+    "final_capital": 416.0,
+    "locked_profit": 406.07,
+    "trading_capital": 9.93,
+    "total_pnl": -84.0,
+    "return_pct": -16.8,
+    "total_trades": 8037,
+    "wins": 4543,
+    "losses": 3494,
+    "win_rate": 56.53,
+    "avg_win": 4.11,
+    "avg_loss": -5.28,
+    "profit_factor": 1.01,
+    "max_drawdown_pct": 26.55,
+    "avg_hold_bars": 12.5,
+    "exit_reasons": {
+      "trailing_stop": 4488,
+      "stop_loss": 3418,
+      "rsi_exhaustion": 23,
+      "max_hold": 43,
+      "equity_stop": 65
+    },
+    "leverage_dist": {
+      "3x": 8037
+    },
+    "top_symbols_pnl": {
+      "AXSUSDT": 248.12,
+      "SKLUSDT": 214.85,
+      "DOGEUSDT": 188.12,
+      "ANKRUSDT": 174.06,
+      "CHZUSDT": 165.98,
+      "RLCUSDT": 163.79,
+      "CHRUSDT": 150.7,
+      "AVAXUSDT": 144.68,
+      "QTUMUSDT": 137.71,
+      "VETUSDT": 122.16
+    },
+    "worst_symbols_pnl": {
+      "IOTAUSDT": -226.57,
+      "ENJUSDT": -203.41,
+      "ONTUSDT": -152.4,
+      "XMRUSDT": -136.86,
+      "SFPUSDT": -131.03
+    },
+    "scenario": "tight_stop_fast_trail",
+    "sl_atr_mult_3x": 2.5,
+    "trailing_act_pct": 0.04,
+    "trailing_dist_pct": 0.02,
+    "max_hold_bars": 96,
+    "elapsed_sec": 225.65
+  },
+  {
+    "initial_capital": 500.0,
+    "final_capital": 248.93,
+    "locked_profit": 239.04,
+    "trading_capital": 9.89,
+    "total_pnl": -251.07,
+    "return_pct": -50.21,
+    "total_trades": 4781,
+    "wins": 2484,
+    "losses": 2297,
+    "win_rate": 51.96,
+    "avg_win": 4.33,
+    "avg_loss": -4.73,
+    "profit_factor": 0.99,
+    "max_drawdown_pct": 26.54,
+    "avg_hold_bars": 21.8,
+    "exit_reasons": {
+      "stop_loss": 2168,
+      "max_hold": 148,
+      "rsi_exhaustion": 33,
+      "trailing_stop": 2364,
+      "equity_stop": 68
+    },
+    "leverage_dist": {
+      "3x": 4781
+    },
+    "top_symbols_pnl": {
+      "SKLUSDT": 151.54,
+      "THETAUSDT": 134.47,
+      "RLCUSDT": 118.7,
+      "CHZUSDT": 107.0,
+      "ZRXUSDT": 101.78,
+      "AVAXUSDT": 99.69,
+      "SANDUSDT": 98.07,
+      "IOSTUSDT": 88.81,
+      "VETUSDT": 87.05,
+      "BANDUSDT": 68.42
+    },
+    "worst_symbols_pnl": {
+      "IOTAUSDT": -157.75,
+      "ENJUSDT": -104.0,
+      "MASKUSDT": -102.18,
+      "SUSHIUSDT": -99.05,
+      "BELUSDT": -88.65
+    },
+    "scenario": "baseline_exit",
+    "sl_atr_mult_3x": 3.0,
+    "trailing_act_pct": 0.06,
+    "trailing_dist_pct": 0.025,
+    "max_hold_bars": 96,
+    "elapsed_sec": 364.13
+  },
+  {
+    "initial_capital": 500.0,
+    "final_capital": 9.89,
+    "locked_profit": 0.0,
+    "trading_capital": 9.89,
+    "total_pnl": -490.11,
+    "return_pct": -98.02,
+    "total_trades": 4752,
+    "wins": 2266,
+    "losses": 2486,
+    "win_rate": 47.69,
+    "avg_win": 3.87,
+    "avg_loss": -3.67,
+    "profit_factor": 0.96,
+    "max_drawdown_pct": 26.62,
+    "avg_hold_bars": 17.0,
+    "exit_reasons": {
+      "stop_loss": 2342,
+      "max_hold": 64,
+      "rsi_exhaustion": 34,
+      "trailing_stop": 2178,
+      "equity_stop": 134
+    },
+    "leverage_dist": {
+      "3x": 4752
+    },
+    "top_symbols_pnl": {
+      "AXSUSDT": 154.0,
+      "RLCUSDT": 115.38,
+      "DOGEUSDT": 82.38,
+      "SKLUSDT": 75.8,
+      "ANKRUSDT": 66.69,
+      "VETUSDT": 66.43,
+      "LINKUSDT": 62.49,
+      "ETHUSDT": 61.85,
+      "SOLUSDT": 58.9,
+      "ZRXUSDT": 57.1
+    },
+    "worst_symbols_pnl": {
+      "IOTAUSDT": -164.79,
+      "ZECUSDT": -94.33,
+      "SUSHIUSDT": -92.16,
+      "COTIUSDT": -90.02,
+      "STORJUSDT": -86.39
+    },
+    "scenario": "tighter_stop",
+    "sl_atr_mult_3x": 2.5,
+    "trailing_act_pct": 0.06,
+    "trailing_dist_pct": 0.025,
+    "max_hold_bars": 96,
+    "elapsed_sec": 372.73
+  }
+]

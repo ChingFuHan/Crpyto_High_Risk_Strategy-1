@@ -1,0 +1,46 @@
+{
+  "initial_capital": 500.0,
+  "final_capital": 272.11,
+  "locked_profit": 239.04,
+  "trading_capital": 33.07,
+  "total_pnl": -227.89,
+  "return_pct": -45.58,
+  "total_trades": 3320,
+  "wins": 1744,
+  "losses": 1576,
+  "win_rate": 52.53,
+  "avg_win": 6.02,
+  "avg_loss": -6.71,
+  "profit_factor": 0.99,
+  "max_drawdown_pct": 26.54,
+  "avg_hold_bars": 21.5,
+  "exit_reasons": {
+    "stop_loss": 1482,
+    "max_hold": 92,
+    "rsi_exhaustion": 25,
+    "trailing_stop": 1661,
+    "equity_stop": 60
+  },
+  "leverage_dist": {
+    "3x": 3320
+  },
+  "top_symbols_pnl": {
+    "SKLUSDT": 146.13,
+    "RLCUSDT": 131.06,
+    "THETAUSDT": 129.98,
+    "CHZUSDT": 111.85,
+    "ZRXUSDT": 106.64,
+    "SANDUSDT": 106.49,
+    "AVAXUSDT": 101.28,
+    "IOSTUSDT": 90.95,
+    "VETUSDT": 79.88,
+    "BANDUSDT": 67.9
+  },
+  "worst_symbols_pnl": {
+    "IOTAUSDT": -155.92,
+    "STORJUSDT": -109.62,
+    "MASKUSDT": -105.24,
+    "ENJUSDT": -100.69,
+    "COTIUSDT": -98.54
+  }
+}

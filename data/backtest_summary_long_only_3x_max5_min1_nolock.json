@@ -1,0 +1,54 @@
+{
+  "initial_capital": 500.0,
+  "final_capital": 9.5,
+  "locked_profit": 0.0,
+  "trading_capital": 9.5,
+  "total_pnl": -490.5,
+  "return_pct": -98.1,
+  "total_trades": 5210,
+  "wins": 2658,
+  "losses": 2552,
+  "win_rate": 51.02,
+  "avg_win": 4.95,
+  "avg_loss": -5.28,
+  "profit_factor": 0.98,
+  "max_drawdown_pct": 27.29,
+  "avg_hold_bars": 22.0,
+  "exit_reasons": {
+    "stop_loss": 2332,
+    "max_hold": 181,
+    "rsi_exhaustion": 37,
+    "trailing_stop": 2496,
+    "equity_stop": 164
+  },
+  "leverage_dist": {
+    "3x": 5210
+  },
+  "top_symbols_pnl": {
+    "SKLUSDT": 162.38,
+    "RLCUSDT": 153.05,
+    "CHZUSDT": 126.75,
+    "ZRXUSDT": 124.5,
+    "SANDUSDT": 117.54,
+    "AVAXUSDT": 109.97,
+    "VETUSDT": 106.96,
+    "IOSTUSDT": 94.85,
+    "THETAUSDT": 80.13,
+    "CTSIUSDT": 77.86
+  },
+  "worst_symbols_pnl": {
+    "IOTAUSDT": -180.76,
+    "CRVUSDT": -138.25,
+    "MASKUSDT": -135.24,
+    "COTIUSDT": -120.65,
+    "BELUSDT": -112.4
+  },
+  "first_entry": "2019-10-09 14:00:00",
+  "last_exit": "2025-01-23 00:00:00",
+  "unique_symbols": 243,
+  "elapsed_sec": 247.0,
+  "scenario": "long_only_3x_max5_min1_nolock",
+  "min_margin": 1.0,
+  "capital_floor": 10.0,
+  "profit_lock_disabled": true
+}

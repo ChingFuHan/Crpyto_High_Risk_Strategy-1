@@ -17,6 +17,35 @@
 - Live order placement path was not exercised; only paper/default scanner flow was validated
 - Paper mode still needs a fuller position-management loop if you want automatic TP/SL lifecycle simulation
 
+## 2026-04-12 — Long-Only 3x Backtest Optimization
+
+### What Changed
+- Extended `core/backtester.py` with reusable prepared-data runs plus configurable leverage, margin floor, capital floor, and symbol-universe filtering
+- Extended `scripts/run_backtest.py` to expose entry/exit tuning parameters and output prefixes
+- Added `scripts/optimize_long_only_3x.py` for repeatable parameter sweeps
+
+### Key Result
+- Tightening entry filters alone was a dead end: the best broad-universe strict-entry run remained the baseline, while stricter filters degraded to roughly `-98%`
+- Exit tuning mattered much more than entry tightening
+
+### Current Best Public Repro
+Command:
+`python -m scripts.run_backtest --out-prefix tuned_long_only_3x_max5_v1 --fixed-lev 3 --max-pos 5 --vol-mult 1.5 --rsi-min 52 --rsi-max 80 --close-ratio 0.55 --min-margin 1 --capital-floor 10 --sl-atr-3x 3.0 --trail-act 0.04 --trail-dist 0.018 --max-hold 96 --rsi-exit-max 85 --standard-symbols --exclude-symbols BTCDOMUSDT USDCUSDT`
+
+### Best Metrics So Far
+- Final capital: `1517.94 USDT`
+- Return: `+203.59%`
+- Profit factor: `1.05`
+- Win rate: `61.1%`
+- Max drawdown: `26.4%`
+- Trades: `9850`
+
+### Artifacts
+- `data/tuned_long_only_3x_max5_v1_trades.csv`
+- `data/tuned_long_only_3x_max5_v1_equity.csv`
+- `data/optimization_long_only_3x_max5_exit_tuning.json`
+- `data/optimization_long_only_3x_max5_exit_refine.json`
+
 ## 2026-04-11 — Project Merge & Foundation Build
 
 ### What Was Done

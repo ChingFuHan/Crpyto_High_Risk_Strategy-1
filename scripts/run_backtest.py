@@ -20,10 +20,42 @@ def main():
     ap = argparse.ArgumentParser(description="Momentum-chase backtest (long only)")
     ap.add_argument("--data", default="data/history/1h",
                     help="Directory with OHLCV CSVs (default: data/history/1h)")
+    ap.add_argument("--out-prefix", default="backtest",
+                    help="Output file prefix under data/")
     ap.add_argument("--capital", type=float, default=500.0,
                     help="Initial capital in USDT (default: 500)")
     ap.add_argument("--max-pos", type=int, default=5,
                     help="Max concurrent positions (default: 5)")
+    ap.add_argument("--fixed-lev", type=int, default=None,
+                    help="Use a fixed leverage instead of score tiers")
+    ap.add_argument("--vol-mult", type=float, default=1.5,
+                    help="Minimum volume ratio for entry")
+    ap.add_argument("--rsi-min", type=float, default=52.0,
+                    help="Minimum RSI for entry")
+    ap.add_argument("--rsi-max", type=float, default=80.0,
+                    help="Maximum RSI for entry")
+    ap.add_argument("--close-ratio", type=float, default=0.55,
+                    help="Minimum close-within-candle ratio for entry")
+    ap.add_argument("--min-margin", type=float, default=5.0,
+                    help="Minimum margin required to open a trade")
+    ap.add_argument("--capital-floor", type=float, default=10.0,
+                    help="Minimum free capital required before new entries")
+    ap.add_argument("--sl-atr-3x", type=float, default=3.0,
+                    help="ATR multiple used for the 3x stop-loss")
+    ap.add_argument("--trail-act", type=float, default=0.06,
+                    help="Profit percentage that activates the trailing stop")
+    ap.add_argument("--trail-dist", type=float, default=0.025,
+                    help="Trailing-stop distance once activated")
+    ap.add_argument("--max-hold", type=int, default=96,
+                    help="Maximum holding period in bars")
+    ap.add_argument("--rsi-exit-max", type=float, default=85.0,
+                    help="Exit if RSI rises above this threshold")
+    ap.add_argument("--standard-symbols", action="store_true",
+                    help="Only trade symbols matching ^[A-Z0-9]+USDT$")
+    ap.add_argument("--exclude-symbols", nargs="*", default=None,
+                    help="Explicit symbol blacklist for the tradable universe")
+    ap.add_argument("--no-profit-lock", action="store_true",
+                    help="Disable the progressive profit-lock feature")
     args = ap.parse_args()
 
     if not os.path.isdir(args.data):
@@ -34,7 +66,24 @@ def main():
     cfg = BacktestConfig(
         initial_capital=args.capital,
         max_positions=args.max_pos,
+        fixed_leverage=args.fixed_lev,
+        volume_mult=args.vol_mult,
+        rsi_entry_min=args.rsi_min,
+        rsi_entry_max=args.rsi_max,
+        min_close_ratio=args.close_ratio,
+        min_margin=args.min_margin,
+        capital_floor=args.capital_floor,
+        sl_atr_mult={3: args.sl_atr_3x},
+        trailing_act_pct=args.trail_act,
+        trailing_dist_pct=args.trail_dist,
+        max_hold_bars=args.max_hold,
+        rsi_exit_max=args.rsi_exit_max,
+        require_standard_symbols=args.standard_symbols,
+        exclude_symbols=args.exclude_symbols or [],
     )
+    if args.no_profit_lock:
+        cfg.profit_lock_mult = 10_000.0
+        cfg.profit_lock_ratio = 0.0
     bt = Backtester(cfg)
     report = bt.run(args.data)
 
@@ -90,7 +139,7 @@ def main():
     print("=" * 60)
 
     # ── save ─────────────────────────────────────────────────────────────
-    bt.save_results()
+    bt.save_results(prefix=args.out_prefix)
 
 
 if __name__ == "__main__":
