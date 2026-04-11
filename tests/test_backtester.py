@@ -37,3 +37,22 @@ def test_entry_signal_uses_runtime_thresholds():
 
     symbol_data["vol_r"][1] = 2.1
     assert backtester._entry_signal(symbol_data, 1) is True
+
+
+def test_period_stats_include_annualized_sharpe_and_calmar():
+    backtester = Backtester(BacktestConfig(verbose=False))
+    backtester._timeline_start = __import__("pandas").Timestamp("2024-01-01 00:00:00")
+    backtester._timeline_end = __import__("pandas").Timestamp("2025-01-01 00:00:00")
+    backtester._bar_seconds = 24 * 3600
+    backtester._equity_points = [100.0, 101.0, 103.0, 102.0, 105.0, 110.0]
+    backtester.max_dd = 0.10
+
+    stats = backtester._compute_period_stats(100.0, 110.0)
+
+    assert stats["annualized_return_pct"] is not None
+    assert stats["annualized_return_pct"] > 9.0
+    assert stats["sharpe_ratio"] is not None
+    assert isinstance(stats["sharpe_ratio"], float)
+    assert stats["calmar_ratio"] is not None
+    assert isinstance(stats["calmar_ratio"], float)
+    assert stats["calmar_ratio"] > 0

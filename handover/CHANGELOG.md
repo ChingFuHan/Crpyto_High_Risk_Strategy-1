@@ -23,6 +23,7 @@
 - Extended `core/backtester.py` with reusable prepared-data runs plus configurable leverage, margin floor, capital floor, and symbol-universe filtering
 - Extended `scripts/run_backtest.py` to expose entry/exit tuning parameters and output prefixes
 - Added `scripts/optimize_long_only_3x.py` for repeatable parameter sweeps
+- Added report metrics for annualized return, Sharpe ratio, and Calmar ratio
 
 ### Key Result
 - Tightening entry filters alone was a dead end: the best broad-universe strict-entry run remained the baseline, while stricter filters degraded to roughly `-98%`
@@ -35,10 +36,17 @@ Command:
 ### Best Metrics So Far
 - Final capital: `1517.94 USDT`
 - Return: `+203.59%`
+- Annualized return: `+18.36%`
+- Sharpe ratio: `0.61`
+- Calmar ratio: `0.70`
 - Profit factor: `1.05`
 - Win rate: `61.1%`
 - Max drawdown: `26.4%`
 - Trades: `9850`
+
+### Validation
+- `python -m pytest -q` → 6 passed
+- Recomputed the best public repro after adding risk-adjusted metrics; headline results stayed consistent
 
 ### Artifacts
 - `data/tuned_long_only_3x_max5_v1_trades.csv`

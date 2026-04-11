@@ -141,12 +141,16 @@ class Backtester:
         self.positions: Dict[str, Position] = {}
         self.trades: List[Trade] = []
         self.equity_curve: List[dict] = []
+        self._equity_points: List[float] = []
         self.cooldowns: Dict[str, int] = {}
         self.peak_equity: float = self.cfg.initial_capital
         self.max_dd: float = 0.0
         self.paused: bool = False        # equity trail stop
         self.locked_profit: float = 0.0  # profit withdrawn & locked
         self.lock_base: float = self.cfg.initial_capital  # next lock level
+        self._timeline_start: Optional[pd.Timestamp] = None
+        self._timeline_end: Optional[pd.Timestamp] = None
+        self._bar_seconds: Optional[float] = None
 
     # ── vectorised indicator computation ──────────────────────────────────
 
@@ -186,6 +190,65 @@ class Backtester:
             and close_price > prev_hi
             and close_ratio >= self.cfg.min_close_ratio
         )
+
+    @staticmethod
+    def _safe_round_ratio(value: Optional[float]):
+        if value is None or np.isnan(value):
+            return None
+        if np.isinf(value):
+            return "∞"
+        return round(float(value), 2)
+
+    def _compute_period_stats(self, initial_capital: float, final_capital: float) -> dict:
+        if (
+            self._timeline_start is None
+            or self._timeline_end is None
+            or self._timeline_end <= self._timeline_start
+        ):
+            return {
+                "annualized_return_pct": None,
+                "sharpe_ratio": None,
+                "calmar_ratio": None,
+            }
+
+        elapsed_seconds = (self._timeline_end - self._timeline_start).total_seconds()
+        years = elapsed_seconds / (365.25 * 24 * 3600)
+        if years <= 0:
+            annualized_return = None
+        elif final_capital <= 0:
+            annualized_return = -1.0
+        else:
+            annualized_return = (final_capital / initial_capital) ** (1 / years) - 1
+
+        sharpe_ratio = None
+        if self._bar_seconds and self._bar_seconds > 0 and len(self._equity_points) >= 2:
+            equity = np.asarray(self._equity_points, dtype=float)
+            periodic_returns = np.diff(equity) / equity[:-1]
+            periodic_returns = periodic_returns[np.isfinite(periodic_returns)]
+            if len(periodic_returns) >= 2:
+                ret_std = float(np.std(periodic_returns, ddof=1))
+                if ret_std == 0:
+                    ret_mean = float(np.mean(periodic_returns))
+                    sharpe_ratio = np.inf if ret_mean > 0 else None
+                else:
+                    periods_per_year = (365.25 * 24 * 3600) / self._bar_seconds
+                    sharpe_ratio = (
+                        float(np.mean(periodic_returns)) / ret_std
+                    ) * np.sqrt(periods_per_year)
+
+        max_dd_decimal = float(self.max_dd)
+        calmar_ratio = None
+        if annualized_return is not None:
+            if max_dd_decimal == 0:
+                calmar_ratio = np.inf if annualized_return > 0 else None
+            else:
+                calmar_ratio = annualized_return / max_dd_decimal
+
+        return {
+            "annualized_return_pct": None if annualized_return is None else round(annualized_return * 100, 2),
+            "sharpe_ratio": self._safe_round_ratio(sharpe_ratio),
+            "calmar_ratio": self._safe_round_ratio(calmar_ratio),
+        }
 
     def _compute(self, df: pd.DataFrame) -> pd.DataFrame:
         """Return *df* enriched with indicators, entry flag, and score."""
@@ -404,6 +467,13 @@ class Backtester:
         sym_data = prepared["symbols"]
         btc_regime = prepared["btc_regime"]
         timeline = prepared["timeline"]
+        timeline_index = pd.to_datetime(timeline)
+        self._timeline_start = timeline_index[0]
+        self._timeline_end = timeline_index[-1]
+        if len(timeline_index) >= 2:
+            step_seconds = timeline_index.to_series().diff().dropna().dt.total_seconds()
+            if not step_seconds.empty:
+                self._bar_seconds = float(step_seconds.median())
 
         enabled_symbols = {
             sym for sym in sym_data
@@ -549,6 +619,7 @@ class Backtester:
                         break
 
             # ── record equity curve ───────────────────────────────────────
+            self._equity_points.append(float(equity))
             if bi % 100 == 0:
                 self.equity_curve.append({"da": t, "equity": round(equity, 2)})
             if self.cfg.verbose and bi % 5000 == 0 and bi:
@@ -561,6 +632,10 @@ class Backtester:
         for sym in list(self.positions):
             d = sym_data[sym]
             self._close(sym, d["cl"][d["n"] - 1], d["da"][d["n"] - 1], "end_of_test")
+
+        final_equity = float(self.capital + self.locked_profit)
+        if not self._equity_points or abs(self._equity_points[-1] - final_equity) > 1e-9:
+            self._equity_points.append(final_equity)
 
         return self._report()
 
@@ -581,6 +656,7 @@ class Backtester:
         total_equity = self.capital + self.locked_profit
         actual_pnl = total_equity - self.cfg.initial_capital
         actual_return = actual_pnl / self.cfg.initial_capital * 100
+        period_stats = self._compute_period_stats(self.cfg.initial_capital, total_equity)
 
         reasons = {}
         for t in self.trades:
@@ -604,6 +680,9 @@ class Backtester:
             "trading_capital": round(self.capital, 2),
             "total_pnl": round(actual_pnl, 2),
             "return_pct": round(actual_return, 2),
+            "annualized_return_pct": period_stats["annualized_return_pct"],
+            "sharpe_ratio": period_stats["sharpe_ratio"],
+            "calmar_ratio": period_stats["calmar_ratio"],
             "total_trades": len(self.trades),
             "wins": len(wins),
             "losses": len(losses),
