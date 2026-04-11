@@ -1,0 +1,37 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+.env.local
+*.key
+secrets/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Data & Logs
+logs/*.log
+data/*.csv
+data/*.pkl
+data/*.h5
+data_cache/
+
+# Misc
+*.skill
+.gemini/
