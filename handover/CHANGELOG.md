@@ -1,5 +1,22 @@
 # Handover / 智慧傳承
 
+## 2026-04-11 — Audit / Validate / Fix Pass
+
+### Findings Fixed
+- Fixed `core/signals.py` `ta` API incompatibility: local environment uses legacy `n=` parameters, which broke `python -m scripts.run_scanner --once`
+- Hardened indicator computation against zero-volume / zero-range candles to avoid `inf` and unstable shadow ratios
+- Changed breakout reference levels to use the prior 20-bar high/low instead of including the current candle, which makes Setup A/C detection internally consistent
+- Fixed `core/risk_manager.py` balance accounting so closing a position returns locked margin plus realized PnL
+
+### Validation
+- `python -m pytest -q` → 3 passed
+- `python -m scripts.run_scanner --once` → completed scan/analyze cycle without crashing
+- `py_compile` check passed for repo Python files
+
+### Residual Risks
+- Live order placement path was not exercised; only paper/default scanner flow was validated
+- Paper mode still needs a fuller position-management loop if you want automatic TP/SL lifecycle simulation
+
 ## 2026-04-11 — Project Merge & Foundation Build
 
 ### What Was Done

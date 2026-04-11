@@ -127,9 +127,18 @@ class RiskManager:
 
     def on_position_closed(self, symbol: str, pnl: float):
         """Handle position closure."""
+        closed_position = next(
+            (p for p in self.state.open_positions if p.symbol == symbol),
+            None,
+        )
         self.state.open_positions = [
             p for p in self.state.open_positions if p.symbol != symbol
         ]
+
+        if closed_position is None:
+            logger.warning(f"[RISK] Closed position not tracked: {symbol}")
+        else:
+            self.state.balance += closed_position.margin + pnl
 
         if pnl < 0:
             self.state.daily_loss += abs(pnl)
