@@ -51,6 +51,8 @@ def main():
     simple = [
         ("Initial Capital",  f"{report['initial_capital']:.2f} USDT"),
         ("Final Capital",    f"{report['final_capital']:.2f} USDT"),
+        ("  Locked Profit",  f"{report.get('locked_profit', 0):.2f} USDT"),
+        ("  Trading Capital", f"{report.get('trading_capital', 0):.2f} USDT"),
         ("Total PnL",        f"{report['total_pnl']:+.2f} USDT"),
         ("Return",           f"{report['return_pct']:+.2f} %"),
         ("Total Trades",     report["total_trades"]),
@@ -78,6 +80,11 @@ def main():
     print()
     print("  Top Symbols (by PnL):")
     for sym, pnl in report.get("top_symbols_pnl", {}).items():
+        print(f"    {sym:<18} {pnl:+.2f}")
+
+    print()
+    print("  Worst Symbols (by PnL):")
+    for sym, pnl in report.get("worst_symbols_pnl", {}).items():
         print(f"    {sym:<18} {pnl:+.2f}")
 
     print("=" * 60)

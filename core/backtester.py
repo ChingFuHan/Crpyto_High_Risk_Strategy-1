@@ -6,6 +6,13 @@ Long-only | 500 USDT | Max 5 concurrent positions | Leverage 3x–10x
 Reads CSV directory of files with columns: da,op,hi,lo,cl,vol
 Produces: trade log CSV, equity curve CSV, and a summary dict.
 
+Key features (v2):
+  - BTC trend regime filter (only trade when BTC above EMA-200)
+  - Drawdown circuit breaker (pause at -30 %, resume at -15 %)
+  - Liquidation modelling (loss capped at margin)
+  - Entry fees tracked in trade PnL
+  - Report uses actual equity change
+
 Usage (via run_backtest.py):
     python -m scripts.run_backtest
     python -m scripts.run_backtest --data data/history/1h --capital 500
@@ -41,28 +48,37 @@ class BacktestConfig:
     ema_fast: int = 9
     ema_mid: int = 21
     ema_slow: int = 50
+    ema_regime: int = 200               # BTC regime filter
     rsi_period: int = 14
     atr_period: int = 14
     vol_ma_period: int = 20
     breakout_lookback: int = 20
 
     # ── entry thresholds ──────────────────────────────────────────────────
-    rsi_entry_min: float = 55.0
-    rsi_entry_max: float = 82.0
-    volume_mult: float = 2.0
-    min_close_ratio: float = 0.6       # candle body bullishness
+    rsi_entry_min: float = 52.0
+    rsi_entry_max: float = 80.0
+    volume_mult: float = 1.5
+    min_close_ratio: float = 0.55       # candle body bullishness
+
+    # ── position sizing ──────────────────────────────────────────────────
+    risk_per_trade: float = 0.15        # 15 % of capital per slot
 
     # ── exit parameters ───────────────────────────────────────────────────
     sl_atr_mult: dict = field(default_factory=lambda: {
-        3: 2.5, 5: 2.0, 7: 1.5, 10: 1.2,
+        3: 3.0, 5: 2.5, 7: 2.0, 10: 1.5,
     })
-    trailing_act_pct: float = 0.08      # activate trailing at +8 %
-    trailing_dist_pct: float = 0.03     # 3 % trail distance
+    trailing_act_pct: float = 0.06      # activate trailing at +6 %
+    trailing_dist_pct: float = 0.025    # 2.5 % trail distance
     rsi_exit_max: float = 85.0
-    max_hold_bars: int = 72             # 72 h for 1h candles
+    max_hold_bars: int = 96             # 96 h for 1h candles
+
+    # ── portfolio-level risk ─────────────────────────────────────────────
+    equity_trail_pct: float = 0.25      # close all if equity drops 25 % from peak
+    profit_lock_mult: float = 1.5       # lock gains when equity hits 1.5x base
+    profit_lock_ratio: float = 0.4      # fraction of excess to lock each time
 
     # ── cooldown ──────────────────────────────────────────────────────────
-    cooldown_bars: int = 3
+    cooldown_bars: int = 5
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -80,6 +96,7 @@ class Position:
     stop_loss: float
     trailing_stop: float
     highest_price: float
+    entry_fee: float = 0.0              # tracked for accurate PnL
     bars_held: int = 0
 
 
@@ -114,6 +131,9 @@ class Backtester:
         self.cooldowns: Dict[str, int] = {}
         self.peak_equity: float = self.cfg.initial_capital
         self.max_dd: float = 0.0
+        self.paused: bool = False        # equity trail stop
+        self.locked_profit: float = 0.0  # profit withdrawn & locked
+        self.lock_base: float = self.cfg.initial_capital  # next lock level
 
     # ── vectorised indicator computation ──────────────────────────────────
 
@@ -180,10 +200,21 @@ class Backtester:
 
         # ── momentum score (0–1) ─────────────────────────────────────────
         trend = ((df["ema_f"] - df["ema_s"]) / df["ema_s"]).clip(0, 0.30)
-        rsi_s = ((df["rsi"] - 55) / 30).clip(0, 0.25)
-        vol_s = ((df["vol_r"] - 2) / 8).clip(0, 0.25)
+        rsi_s = ((df["rsi"] - 50) / 35).clip(0, 0.25)
+        vol_s = ((df["vol_r"] - 1.5) / 8).clip(0, 0.25)
         roc_s = (df["roc"] * 5).clip(0, 0.20)
         df["score"] = (trend + rsi_s + vol_s + roc_s).clip(0, 1.0)
+
+        return df
+
+    def _compute_regime(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Compute BTC regime filter: price > EMA-regime."""
+        df = df.copy()
+        cl = df["cl"].astype(float)
+        ema = self._ema(cl, self.cfg.ema_regime)
+        df["ema_regime"] = ema
+        df["regime_bull"] = cl > ema
+        return df
 
         return df
 
@@ -202,13 +233,14 @@ class Backtester:
         if slots <= 0 or self.capital < 10:
             return
         lev = self._lev(score)
-        margin = round(min(self.capital * 0.20, self.capital / slots), 4)
+        margin = round(min(self.capital * self.cfg.risk_per_trade,
+                           self.capital / slots), 4)
         if margin < 5:
             return
 
         notional = margin * lev
         fee = notional * self.cfg.fee_rate
-        sl_mult = self.cfg.sl_atr_mult.get(lev, 2.0)
+        sl_mult = self.cfg.sl_atr_mult.get(lev, 2.5)
         sl = price - sl_mult * atr
 
         self.capital -= (margin + fee)
@@ -216,26 +248,35 @@ class Backtester:
             symbol=sym, entry_price=price, entry_time=da,
             leverage=lev, margin=margin, notional=notional,
             stop_loss=sl, trailing_stop=sl, highest_price=price,
+            entry_fee=fee,
         )
 
     def _close(self, sym: str, exit_price: float, da: str, reason: str):
         pos = self.positions.pop(sym)
         chg = (exit_price - pos.entry_price) / pos.entry_price
-        pnl = pos.notional * chg
+        raw_pnl = pos.notional * chg
         exit_not = pos.notional * (exit_price / pos.entry_price)
-        fee = abs(exit_not) * self.cfg.fee_rate
-        pnl -= fee
-        self.capital += pos.margin + pnl
+        exit_fee = abs(exit_not) * self.cfg.fee_rate
+        pnl = raw_pnl - exit_fee - pos.entry_fee
+
+        # Liquidation: loss cannot exceed margin
+        returned = pos.margin + pnl
+        if returned < 0:
+            pnl = -pos.margin
+            returned = 0.0
+            reason = "liquidation"
+
+        self.capital += returned
 
         self.trades.append(Trade(
             symbol=sym, entry_time=pos.entry_time, exit_time=da,
             entry_price=pos.entry_price, exit_price=exit_price,
             leverage=pos.leverage, margin=pos.margin,
             pnl=round(pnl, 4),
-            pnl_pct=round(chg * pos.leverage * 100, 2),
+            pnl_pct=round(pnl / pos.margin * 100, 2),
             exit_reason=reason, bars_held=pos.bars_held,
         ))
-        if reason == "stop_loss":
+        if reason in ("stop_loss", "liquidation"):
             self.cooldowns[sym] = self.cfg.cooldown_bars
 
     # ── main simulation ──────────────────────────────────────────────────
@@ -251,14 +292,23 @@ class Backtester:
             return {"error": "no data"}
 
         sym_data: Dict[str, dict] = {}
+        btc_regime: Dict[str, bool] = {}       # BTC trend filter
+
         for fp in csvs:
             sym = fp.stem
             try:
                 raw = pd.read_csv(fp)
             except Exception:
                 continue
-            if len(raw) < 60:
+            if len(raw) < 220:                  # need EMA-200 warmup
                 continue
+
+            if sym == "BTCUSDT":
+                df_btc = self._compute_regime(raw)
+                df_btc = df_btc.dropna(subset=["ema_regime"]).reset_index(drop=True)
+                for _, row in df_btc.iterrows():
+                    btc_regime[row["da"]] = bool(row["regime_bull"])
+
             df = self._compute(raw)
             df = df.dropna(subset=["rsi", "ema_f", "ema_s", "atr"]).reset_index(drop=True)
             if df.empty:
@@ -281,7 +331,9 @@ class Backtester:
             print("  ✗ no symbols with enough data")
             return {"error": "insufficient data"}
 
+        has_regime = len(btc_regime) > 0
         print(f"  {n_sym} symbols loaded")
+        print(f"  BTC regime filter: {'ON' if has_regime else 'OFF (no BTCUSDT data)'}")
 
         # 2 — unified timeline ------------------------------------------------
         all_da = set()
@@ -304,7 +356,6 @@ class Backtester:
             active: Dict[str, int] = {}
             for sym, d in sym_data.items():
                 p = ptrs[sym]
-                # skip any bars that fell behind (data gaps)
                 while p < d["n"] and d["da"][p] < t:
                     p += 1
                 if p < d["n"] and d["da"][p] == t:
@@ -349,8 +400,59 @@ class Backtester:
                 if rsi > self.cfg.rsi_exit_max:
                     self._close(sym, cl, t, "rsi_exhaustion"); continue
 
+            # ── equity snapshot (before entries) ─────────────────────────
+            equity = self.capital + self.locked_profit
+            for sym, pos in self.positions.items():
+                if sym in active:
+                    cl_v = sym_data[sym]["cl"][active[sym]]
+                else:
+                    cl_v = pos.entry_price
+                unrealised = pos.notional * (
+                    (cl_v - pos.entry_price) / pos.entry_price
+                )
+                equity += pos.margin + unrealised
+            self.peak_equity = max(self.peak_equity, equity)
+            dd = (self.peak_equity - equity) / self.peak_equity if self.peak_equity else 0
+            self.max_dd = max(self.max_dd, dd)
+
+            # ── progressive profit locking ────────────────────────────────
+            lock_threshold = self.lock_base * self.cfg.profit_lock_mult
+            if equity > lock_threshold:
+                excess = equity - self.lock_base
+                to_lock = excess * self.cfg.profit_lock_ratio
+                self.locked_profit += to_lock
+                self.capital -= to_lock
+                self.lock_base = equity - to_lock  # raise base for next lock
+                self.peak_equity = equity - to_lock
+
+            # ── portfolio equity trailing stop ────────────────────────────
+            # Resume when BTC regime turns bullish (not fixed timer)
+            if self.paused:
+                btc_bull = btc_regime.get(t, False) if has_regime else True
+                if btc_bull and len(self.positions) == 0:
+                    self.paused = False
+                    self.peak_equity = equity  # reset peak on resume
+
+            if not self.paused and dd >= self.cfg.equity_trail_pct and len(self.positions) > 0:
+                for sym in list(self.positions):
+                    if sym in active:
+                        cl_v = sym_data[sym]["cl"][active[sym]]
+                    else:
+                        cl_v = self.positions[sym].entry_price
+                    self._close(sym, cl_v, t, "equity_stop")
+                self.paused = True
+
             # ── entries ───────────────────────────────────────────────────
-            if len(self.positions) < self.cfg.max_positions and self.capital > 10:
+            allow_entry = (
+                not self.paused
+                and len(self.positions) < self.cfg.max_positions
+                and self.capital > 10
+            )
+            # BTC regime check: only open in BTC uptrend (or when no data)
+            if allow_entry and has_regime:
+                allow_entry = btc_regime.get(t, False)
+
+            if allow_entry:
                 cands = []
                 for sym, idx in active.items():
                     if sym in self.positions or sym in self.cooldowns:
@@ -366,25 +468,14 @@ class Backtester:
                     if self.capital < 10:
                         break
 
-            # ── equity ────────────────────────────────────────────────────
-            equity = self.capital
-            for sym, pos in self.positions.items():
-                if sym in active:
-                    cl = sym_data[sym]["cl"][active[sym]]
-                else:
-                    cl = pos.entry_price
-                equity += pos.margin + pos.notional * (
-                    (cl - pos.entry_price) / pos.entry_price
-                )
-            self.peak_equity = max(self.peak_equity, equity)
-            dd = (self.peak_equity - equity) / self.peak_equity if self.peak_equity else 0
-            self.max_dd = max(self.max_dd, dd)
-
+            # ── record equity curve ───────────────────────────────────────
             if bi % 100 == 0:
                 self.equity_curve.append({"da": t, "equity": round(equity, 2)})
             if bi % 5000 == 0 and bi:
+                flag = " [PAUSED]" if self.paused else ""
+                lk = f" locked={self.locked_profit:.0f}" if self.locked_profit else ""
                 print(f"  bar {bi:>8,}/{n_bars:,}  "
-                      f"equity={equity:>10.2f}  trades={len(self.trades)}")
+                      f"equity={equity:>10.2f}  trades={len(self.trades)}{flag}{lk}")
 
         # 5 — close remaining positions ----------------------------------------
         for sym in list(self.positions):
@@ -406,6 +497,11 @@ class Backtester:
         g_loss = sum(t.pnl for t in losses) if losses else 0
         pf = abs(g_win / g_loss) if g_loss else float("inf")
 
+        # Use actual capital change for accuracy (include locked profit)
+        total_equity = self.capital + self.locked_profit
+        actual_pnl = total_equity - self.cfg.initial_capital
+        actual_return = actual_pnl / self.cfg.initial_capital * 100
+
         reasons = {}
         for t in self.trades:
             reasons[t.exit_reason] = reasons.get(t.exit_reason, 0) + 1
@@ -419,12 +515,15 @@ class Backtester:
         for t in self.trades:
             sym_pnl[t.symbol] = sym_pnl.get(t.symbol, 0) + t.pnl
         top = sorted(sym_pnl.items(), key=lambda x: x[1], reverse=True)[:10]
+        bottom = sorted(sym_pnl.items(), key=lambda x: x[1])[:5]
 
         return {
             "initial_capital": self.cfg.initial_capital,
-            "final_capital": round(self.capital, 2),
-            "total_pnl": round(g_win + g_loss, 2),
-            "return_pct": round((g_win + g_loss) / self.cfg.initial_capital * 100, 2),
+            "final_capital": round(total_equity, 2),
+            "locked_profit": round(self.locked_profit, 2),
+            "trading_capital": round(self.capital, 2),
+            "total_pnl": round(actual_pnl, 2),
+            "return_pct": round(actual_return, 2),
             "total_trades": len(self.trades),
             "wins": len(wins),
             "losses": len(losses),
@@ -437,6 +536,7 @@ class Backtester:
             "exit_reasons": reasons,
             "leverage_dist": lev_d,
             "top_symbols_pnl": {s: round(p, 2) for s, p in top},
+            "worst_symbols_pnl": {s: round(p, 2) for s, p in bottom},
         }
 
     # ── persist results ───────────────────────────────────────────────────
