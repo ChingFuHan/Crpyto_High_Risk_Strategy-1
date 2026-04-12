@@ -60,6 +60,26 @@ def main():
                     help="Inclusive backtest start timestamp (YYYY-MM-DD or full datetime)")
     ap.add_argument("--end-date", default=None,
                     help="Inclusive backtest end timestamp (YYYY-MM-DD or full datetime)")
+    ap.add_argument("--ema-fast", type=int, default=9,
+                    help="Fast EMA period (default: 9)")
+    ap.add_argument("--ema-mid", type=int, default=21,
+                    help="Mid EMA period (default: 21)")
+    ap.add_argument("--ema-slow", type=int, default=50,
+                    help="Slow EMA period (default: 50)")
+    ap.add_argument("--ema-regime", type=int, default=200,
+                    help="BTC regime EMA period (default: 200; use 2400 for 5m)")
+    ap.add_argument("--cooldown-bars", type=int, default=5,
+                    help="Cooldown bars after stop-loss (default: 5)")
+    ap.add_argument("--breakout-lookback", type=int, default=20,
+                    help="Breakout lookback period (default: 20)")
+    ap.add_argument("--equity-trail", type=float, default=0.25,
+                    help="Equity trailing stop percentage (default: 0.25)")
+    ap.add_argument("--rsi-period", type=int, default=14,
+                    help="RSI computation period (default: 14)")
+    ap.add_argument("--atr-period", type=int, default=14,
+                    help="ATR computation period (default: 14)")
+    ap.add_argument("--vol-ma-period", type=int, default=20,
+                    help="Volume MA period (default: 20)")
     args = ap.parse_args()
 
     if not os.path.isdir(args.data):
@@ -84,6 +104,16 @@ def main():
         rsi_exit_max=args.rsi_exit_max,
         require_standard_symbols=args.standard_symbols,
         exclude_symbols=args.exclude_symbols or [],
+        ema_fast=args.ema_fast,
+        ema_mid=args.ema_mid,
+        ema_slow=args.ema_slow,
+        ema_regime=args.ema_regime,
+        cooldown_bars=args.cooldown_bars,
+        breakout_lookback=args.breakout_lookback,
+        equity_trail_pct=args.equity_trail,
+        rsi_period=args.rsi_period,
+        atr_period=args.atr_period,
+        vol_ma_period=args.vol_ma_period,
     )
     if args.no_profit_lock:
         cfg.profit_lock_mult = 10_000.0

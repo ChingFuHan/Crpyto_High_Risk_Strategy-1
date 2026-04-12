@@ -1,0 +1,298 @@
+[
+  {
+    "final": 11.31,
+    "return_pct": -97.74,
+    "trades": 4276,
+    "win_rate": 29.35,
+    "max_dd": 25.93,
+    "sharpe": -7.06,
+    "calmar": -3.85,
+    "avg_hold": 28.6,
+    "pf": 0.8,
+    "exit_reasons": {
+      "stop_loss": 2996,
+      "trailing_stop": 1237,
+      "equity_stop": 42,
+      "max_hold": 1
+    },
+    "error": null,
+    "tag": "12x_baseline",
+    "profile": "12x",
+    "elapsed": 80.9,
+    "config_overrides": {
+      "trailing_act_pct": 0.04,
+      "trailing_dist_pct": 0.018,
+      "max_hold_bars": 1152,
+      "rsi_exit_max": 85,
+      "cooldown_bars": 60,
+      "sl_atr_3x": 3.0
+    }
+  },
+  {
+    "final": 9.96,
+    "return_pct": -98.01,
+    "trades": 5458,
+    "win_rate": 38.22,
+    "max_dd": 25.76,
+    "sharpe": -8.02,
+    "calmar": -3.88,
+    "avg_hold": 19.2,
+    "pf": 0.82,
+    "exit_reasons": {
+      "stop_loss": 3339,
+      "trailing_stop": 2078,
+      "equity_stop": 40,
+      "max_hold": 1
+    },
+    "error": null,
+    "tag": "12x_tight_trail",
+    "profile": "12x",
+    "elapsed": 85.5,
+    "config_overrides": {
+      "trailing_act_pct": 0.025,
+      "trailing_dist_pct": 0.012,
+      "max_hold_bars": 1152,
+      "rsi_exit_max": 85,
+      "cooldown_bars": 60,
+      "sl_atr_3x": 3.0
+    }
+  },
+  {
+    "final": 34.32,
+    "return_pct": -93.14,
+    "trades": 2846,
+    "win_rate": 22.63,
+    "max_dd": 25.86,
+    "sharpe": -4.79,
+    "calmar": -3.85,
+    "avg_hold": 47.3,
+    "pf": 0.83,
+    "exit_reasons": {
+      "stop_loss": 2179,
+      "trailing_stop": 631,
+      "equity_stop": 31,
+      "max_hold": 5
+    },
+    "error": null,
+    "tag": "12x_wide_trail",
+    "profile": "12x",
+    "elapsed": 66.5,
+    "config_overrides": {
+      "trailing_act_pct": 0.06,
+      "trailing_dist_pct": 0.03,
+      "max_hold_bars": 1152,
+      "rsi_exit_max": 85,
+      "cooldown_bars": 60,
+      "sl_atr_3x": 3.0
+    }
+  },
+  {
+    "final": 28.65,
+    "return_pct": -94.27,
+    "trades": 2893,
+    "win_rate": 42.48,
+    "max_dd": 25.72,
+    "sharpe": -4.48,
+    "calmar": -3.87,
+    "avg_hold": 49.5,
+    "pf": 0.83,
+    "exit_reasons": {
+      "trailing_stop": 1219,
+      "stop_loss": 1625,
+      "equity_stop": 45,
+      "max_hold": 2,
+      "end_of_test": 2
+    },
+    "error": null,
+    "tag": "12x_wide_stop",
+    "profile": "12x",
+    "elapsed": 65.3,
+    "config_overrides": {
+      "trailing_act_pct": 0.04,
+      "trailing_dist_pct": 0.018,
+      "max_hold_bars": 1152,
+      "rsi_exit_max": 85,
+      "cooldown_bars": 60,
+      "sl_atr_3x": 5.0
+    }
+  },
+  {
+    "final": 9.92,
+    "return_pct": -98.02,
+    "trades": 5356,
+    "win_rate": 21.75,
+    "max_dd": 26.47,
+    "sharpe": -8.12,
+    "calmar": -3.78,
+    "avg_hold": 20.0,
+    "pf": 0.78,
+    "exit_reasons": {
+      "stop_loss": 4171,
+      "trailing_stop": 1148,
+      "equity_stop": 37
+    },
+    "error": null,
+    "tag": "12x_tight_stop",
+    "profile": "12x",
+    "elapsed": 91.8,
+    "config_overrides": {
+      "trailing_act_pct": 0.04,
+      "trailing_dist_pct": 0.018,
+      "max_hold_bars": 1152,
+      "rsi_exit_max": 85,
+      "cooldown_bars": 60,
+      "sl_atr_3x": 2.0
+    }
+  },
+  {
+    "final": 11.52,
+    "return_pct": -97.7,
+    "trades": 4338,
+    "win_rate": 29.55,
+    "max_dd": 27.14,
+    "sharpe": -6.98,
+    "calmar": -3.68,
+    "avg_hold": 28.1,
+    "pf": 0.81,
+    "exit_reasons": {
+      "stop_loss": 3025,
+      "trailing_stop": 1257,
+      "equity_stop": 47,
+      "max_hold": 9
+    },
+    "error": null,
+    "tag": "12x_short_hold",
+    "profile": "12x",
+    "elapsed": 83.9,
+    "config_overrides": {
+      "trailing_act_pct": 0.04,
+      "trailing_dist_pct": 0.018,
+      "max_hold_bars": 576,
+      "rsi_exit_max": 85,
+      "cooldown_bars": 60,
+      "sl_atr_3x": 3.0
+    }
+  },
+  {
+    "final": 12.03,
+    "return_pct": -97.59,
+    "trades": 4105,
+    "win_rate": 28.99,
+    "max_dd": 26.38,
+    "sharpe": -7.05,
+    "calmar": -3.79,
+    "avg_hold": 28.7,
+    "pf": 0.81,
+    "exit_reasons": {
+      "stop_loss": 2894,
+      "trailing_stop": 1175,
+      "equity_stop": 35,
+      "max_hold": 1
+    },
+    "error": null,
+    "tag": "12x_hi_vol",
+    "profile": "12x",
+    "elapsed": 92.2,
+    "config_overrides": {
+      "trailing_act_pct": 0.04,
+      "trailing_dist_pct": 0.018,
+      "max_hold_bars": 1152,
+      "rsi_exit_max": 85,
+      "cooldown_bars": 60,
+      "volume_mult": 2.5,
+      "sl_atr_3x": 3.0
+    }
+  },
+  {
+    "final": 10.23,
+    "return_pct": -97.95,
+    "trades": 4066,
+    "win_rate": 29.46,
+    "max_dd": 25.64,
+    "sharpe": -7.44,
+    "calmar": -3.9,
+    "avg_hold": 26.7,
+    "pf": 0.8,
+    "exit_reasons": {
+      "stop_loss": 2837,
+      "trailing_stop": 1190,
+      "equity_stop": 39
+    },
+    "error": null,
+    "tag": "12x_narrow_rsi",
+    "profile": "12x",
+    "elapsed": 96.8,
+    "config_overrides": {
+      "trailing_act_pct": 0.04,
+      "trailing_dist_pct": 0.018,
+      "max_hold_bars": 1152,
+      "rsi_exit_max": 80,
+      "cooldown_bars": 60,
+      "rsi_entry_min": 55.0,
+      "sl_atr_3x": 3.0
+    }
+  },
+  {
+    "final": 26.28,
+    "return_pct": -94.74,
+    "trades": 2005,
+    "win_rate": 32.42,
+    "max_dd": 26.8,
+    "sharpe": -4.7,
+    "calmar": -3.72,
+    "avg_hold": 67.4,
+    "pf": 0.77,
+    "exit_reasons": {
+      "stop_loss": 1314,
+      "trailing_stop": 602,
+      "max_hold": 41,
+      "equity_stop": 45,
+      "end_of_test": 3
+    },
+    "error": null,
+    "tag": "12x_safe_combo",
+    "profile": "12x",
+    "elapsed": 77.3,
+    "config_overrides": {
+      "trailing_act_pct": 0.06,
+      "trailing_dist_pct": 0.025,
+      "max_hold_bars": 576,
+      "rsi_exit_max": 80,
+      "cooldown_bars": 60,
+      "volume_mult": 2.5,
+      "rsi_entry_min": 55.0,
+      "sl_atr_3x": 5.0
+    }
+  },
+  {
+    "final": 83.35,
+    "return_pct": -83.33,
+    "trades": 4775,
+    "win_rate": 53.03,
+    "max_dd": 26.01,
+    "sharpe": -2.58,
+    "calmar": -3.74,
+    "avg_hold": 27.4,
+    "pf": 0.92,
+    "exit_reasons": {
+      "trailing_stop": 2510,
+      "stop_loss": 2196,
+      "max_hold": 33,
+      "equity_stop": 35,
+      "end_of_test": 1
+    },
+    "error": null,
+    "tag": "12x_aggr_combo",
+    "profile": "12x",
+    "elapsed": 84.2,
+    "config_overrides": {
+      "trailing_act_pct": 0.025,
+      "trailing_dist_pct": 0.01,
+      "max_hold_bars": 288,
+      "rsi_exit_max": 78,
+      "cooldown_bars": 36,
+      "volume_mult": 2.0,
+      "sl_atr_3x": 5.0
+    }
+  }
+]

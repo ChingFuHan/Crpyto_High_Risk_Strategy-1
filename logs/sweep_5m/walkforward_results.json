@@ -1,0 +1,200 @@
+{
+  "config": {
+    "initial_capital": 500.0,
+    "max_positions": 5,
+    "fixed_leverage": 3,
+    "rsi_entry_min": 60.0,
+    "rsi_entry_max": 72.0,
+    "min_close_ratio": 0.55,
+    "min_margin": 1.0,
+    "capital_floor": 10.0,
+    "require_standard_symbols": true,
+    "exclude_symbols": [
+      "BTCDOMUSDT",
+      "USDCUSDT"
+    ],
+    "equity_trail_pct": 0.25,
+    "profit_lock_mult": 1.5,
+    "profit_lock_ratio": 0.4,
+    "ema_fast": 108,
+    "ema_mid": 252,
+    "ema_slow": 600,
+    "ema_regime": 2400,
+    "rsi_period": 168,
+    "atr_period": 168,
+    "vol_ma_period": 240,
+    "breakout_lookback": 240,
+    "volume_mult": 3.0,
+    "breakout_margin": 0.005,
+    "min_entry_score": 0.25,
+    "atr_floor_pct": 0.006,
+    "trailing_act_pct": 0.02,
+    "trailing_dist_pct": 0.008,
+    "sl_atr_mult": {
+      "3": 5.0
+    },
+    "max_hold_bars": 288,
+    "rsi_exit_max": 78,
+    "cooldown_bars": 36
+  },
+  "results": [
+    {
+      "window": "WF1",
+      "phase": "TRAIN",
+      "period": "2021-01-01~2021-12-31",
+      "final": 1806.71,
+      "ret": 261.34,
+      "trades": 1608,
+      "wr": 66.36,
+      "dd": 25.04,
+      "sharpe": 2.95,
+      "pf": 1.19,
+      "avg_hold": 8.8,
+      "exits": {
+        "trailing_stop": 1067,
+        "stop_loss": 540,
+        "equity_stop": 1
+      },
+      "err": null
+    },
+    {
+      "window": "WF1",
+      "phase": "TEST",
+      "period": "2022-01-01~2022-06-30",
+      "final": 1222.82,
+      "ret": 144.56,
+      "trades": 385,
+      "wr": 69.87,
+      "dd": 12.18,
+      "sharpe": 4.05,
+      "pf": 1.58,
+      "avg_hold": 13.6,
+      "exits": {
+        "trailing_stop": 269,
+        "stop_loss": 116
+      },
+      "err": null
+    },
+    {
+      "window": "WF2",
+      "phase": "TRAIN",
+      "period": "2022-01-01~2022-12-31",
+      "final": 1670.96,
+      "ret": 234.19,
+      "trades": 677,
+      "wr": 67.8,
+      "dd": 12.67,
+      "sharpe": 3.26,
+      "pf": 1.41,
+      "avg_hold": 13.5,
+      "exits": {
+        "trailing_stop": 459,
+        "stop_loss": 218
+      },
+      "err": null
+    },
+    {
+      "window": "WF2",
+      "phase": "TEST",
+      "period": "2023-01-01~2023-06-30",
+      "final": 771.03,
+      "ret": 54.21,
+      "trades": 593,
+      "wr": 62.39,
+      "dd": 20.92,
+      "sharpe": 1.67,
+      "pf": 1.15,
+      "avg_hold": 10.8,
+      "exits": {
+        "stop_loss": 223,
+        "trailing_stop": 370
+      },
+      "err": null
+    },
+    {
+      "window": "WF3",
+      "phase": "TRAIN",
+      "period": "2023-01-01~2023-12-31",
+      "final": 2189.81,
+      "ret": 337.96,
+      "trades": 1513,
+      "wr": 65.9,
+      "dd": 20.92,
+      "sharpe": 2.83,
+      "pf": 1.23,
+      "avg_hold": 9.9,
+      "exits": {
+        "stop_loss": 516,
+        "trailing_stop": 997
+      },
+      "err": null
+    },
+    {
+      "window": "WF3",
+      "phase": "TEST",
+      "period": "2024-01-01~2024-06-30",
+      "final": 1100.58,
+      "ret": 120.12,
+      "trades": 1302,
+      "wr": 67.13,
+      "dd": 19.51,
+      "sharpe": 2.71,
+      "pf": 1.13,
+      "avg_hold": 10.2,
+      "exits": {
+        "trailing_stop": 874,
+        "stop_loss": 427,
+        "end_of_test": 1
+      },
+      "err": null
+    },
+    {
+      "window": "WF4",
+      "phase": "TRAIN",
+      "period": "2024-01-01~2024-12-31",
+      "final": 3843.0,
+      "ret": 668.6,
+      "trades": 2815,
+      "wr": 67.67,
+      "dd": 25.11,
+      "sharpe": 3.8,
+      "pf": 1.21,
+      "avg_hold": 10.0,
+      "exits": {
+        "trailing_stop": 1905,
+        "stop_loss": 908,
+        "equity_stop": 1,
+        "end_of_test": 1
+      },
+      "err": null
+    },
+    {
+      "window": "WF4",
+      "phase": "TEST",
+      "period": "2025-01-01~2025-04-12",
+      "final": 778.96,
+      "ret": 55.79,
+      "trades": 617,
+      "wr": 63.21,
+      "dd": 23.32,
+      "sharpe": 1.91,
+      "pf": 1.14,
+      "avg_hold": 10.6,
+      "exits": {
+        "stop_loss": 226,
+        "trailing_stop": 390,
+        "end_of_test": 1
+      },
+      "err": null
+    }
+  ],
+  "summary": {
+    "avg_train_ret": 375.52,
+    "avg_test_ret": 93.67,
+    "avg_train_pf": 1.26,
+    "avg_test_pf": 1.25,
+    "oos_positive": 4,
+    "oos_total": 4
+  },
+  "total_time_s": 3245.5
+}

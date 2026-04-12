@@ -63,6 +63,9 @@ class BacktestConfig:
     rsi_entry_max: float = 80.0
     volume_mult: float = 1.5
     min_close_ratio: float = 0.55       # candle body bullishness
+    min_entry_score: float = 0.0        # min momentum score to enter
+    breakout_margin: float = 0.0        # require close > prev_hi*(1+margin)
+    atr_floor_pct: float = 0.0          # skip entry if atr/price < floor
 
     # ── position sizing ──────────────────────────────────────────────────
     risk_per_trade: float = 0.15        # 15 % of capital per slot
@@ -184,12 +187,21 @@ class Backtester:
         close_price = data["cl"][idx]
         if np.isnan(prev_hi) or np.isnan(rsi) or np.isnan(vol_r) or np.isnan(close_ratio):
             return False
+        c = self.cfg
+        breakout_level = prev_hi * (1 + c.breakout_margin)
+        if c.atr_floor_pct > 0:
+            atr = data["atr"][idx]
+            if np.isnan(atr) or (atr / close_price) < c.atr_floor_pct:
+                return False
+        if c.min_entry_score > 0:
+            if data["score"][idx] < c.min_entry_score:
+                return False
         return bool(
             data["trend_up"][idx]
-            and self.cfg.rsi_entry_min <= rsi <= self.cfg.rsi_entry_max
-            and vol_r >= self.cfg.volume_mult
-            and close_price > prev_hi
-            and close_ratio >= self.cfg.min_close_ratio
+            and c.rsi_entry_min <= rsi <= c.rsi_entry_max
+            and vol_r >= c.volume_mult
+            and close_price > breakout_level
+            and close_ratio >= c.min_close_ratio
         )
 
     @staticmethod
@@ -456,6 +468,7 @@ class Backtester:
         for d in sym_data.values():
             all_da.update(d["da"])
         timeline = sorted(all_da)
+
         return {
             "symbols": sym_data,
             "btc_regime": btc_regime,
@@ -573,25 +586,30 @@ class Backtester:
             print(f"  capital: {self.capital} USDT")
             print("-" * 60)
 
-        # 3 — pointers
-        ptrs = {s: 0 for s in enabled_symbols}
+        # 3 — convert timeline to fast lookup structure
+        # Build per-symbol date-to-index mapping for enabled symbols only
+        # Uses Python set for O(1) membership + dict for index lookup
+        if self.cfg.verbose:
+            print("  Building symbol index …")
+        sym_date_idx: Dict[str, dict] = {}
+        for sym in enabled_symbols:
+            d = sym_data[sym]
+            da = d["da"]
+            mapping = {}
+            for i in range(d["n"]):
+                mapping[da[i]] = i
+            sym_date_idx[sym] = mapping
 
         # 4 — bar-by-bar simulation -------------------------------------------
         n_bars = len(timeline)
         for bi, t in enumerate(timeline):
 
-            # advance pointers & gather active bars
+            # gather active bars via pre-built lookup (O(positions + entries) not O(all symbols))
             active: Dict[str, int] = {}
             for sym in enabled_symbols:
-                d = sym_data[sym]
-                p = ptrs[sym]
-                while p < d["n"] and d["da"][p] < t:
-                    p += 1
-                if p < d["n"] and d["da"][p] == t:
-                    active[sym] = p
-                    ptrs[sym] = p + 1
-                else:
-                    ptrs[sym] = p
+                idx = sym_date_idx[sym].get(t)
+                if idx is not None:
+                    active[sym] = idx
 
             # tick cooldowns
             for s in list(self.cooldowns):
