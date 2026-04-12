@@ -1,3 +1,5 @@
+import numpy as np
+
 from core.backtester import Backtester, BacktestConfig
 
 
@@ -56,3 +58,62 @@ def test_period_stats_include_annualized_sharpe_and_calmar():
     assert stats["calmar_ratio"] is not None
     assert isinstance(stats["calmar_ratio"], float)
     assert stats["calmar_ratio"] > 0
+
+
+def test_slice_prepared_filters_dates_and_keeps_date_only_end_inclusive():
+    prepared = {
+        "symbols": {
+            "AAAUSDT": {
+                "da": np.array([
+                    "2024-01-01 00:00:00",
+                    "2024-01-01 12:00:00",
+                    "2024-01-02 00:00:00",
+                ], dtype=object),
+                "cl": np.array([1.0, 2.0, 3.0]),
+                "n": 3,
+            }
+        },
+        "btc_regime": {
+            "2024-01-01 00:00:00": True,
+            "2024-01-01 12:00:00": False,
+            "2024-01-02 00:00:00": True,
+        },
+        "timeline": [
+            "2024-01-01 00:00:00",
+            "2024-01-01 12:00:00",
+            "2024-01-02 00:00:00",
+        ],
+    }
+
+    sliced = Backtester.slice_prepared(
+        prepared,
+        start_date="2024-01-01",
+        end_date="2024-01-01",
+    )
+
+    assert sliced["timeline"] == [
+        "2024-01-01 00:00:00",
+        "2024-01-01 12:00:00",
+    ]
+    assert sliced["symbols"]["AAAUSDT"]["n"] == 2
+    assert sliced["symbols"]["AAAUSDT"]["cl"].tolist() == [1.0, 2.0]
+    assert list(sliced["btc_regime"]) == [
+        "2024-01-01 00:00:00",
+        "2024-01-01 12:00:00",
+    ]
+
+
+def test_slice_prepared_rejects_inverted_range():
+    prepared = {
+        "symbols": {"AAAUSDT": {"da": np.array(["2024-01-01 00:00:00"], dtype=object), "n": 1}},
+        "btc_regime": {},
+        "timeline": ["2024-01-01 00:00:00"],
+    }
+
+    sliced = Backtester.slice_prepared(
+        prepared,
+        start_date="2024-01-02",
+        end_date="2024-01-01",
+    )
+
+    assert sliced == {"error": "start_date after end_date"}

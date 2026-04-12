@@ -56,6 +56,10 @@ def main():
                     help="Explicit symbol blacklist for the tradable universe")
     ap.add_argument("--no-profit-lock", action="store_true",
                     help="Disable the progressive profit-lock feature")
+    ap.add_argument("--start-date", default=None,
+                    help="Inclusive backtest start timestamp (YYYY-MM-DD or full datetime)")
+    ap.add_argument("--end-date", default=None,
+                    help="Inclusive backtest end timestamp (YYYY-MM-DD or full datetime)")
     args = ap.parse_args()
 
     if not os.path.isdir(args.data):
@@ -85,7 +89,12 @@ def main():
         cfg.profit_lock_mult = 10_000.0
         cfg.profit_lock_ratio = 0.0
     bt = Backtester(cfg)
-    report = bt.run(args.data)
+    prepared = bt.prepare_data(args.data)
+    if "error" in prepared:
+        report = prepared
+    else:
+        prepared = bt.slice_prepared(prepared, args.start_date, args.end_date)
+        report = bt.run_prepared(prepared)
 
     # ── pretty-print report ──────────────────────────────────────────────
     print()
@@ -142,7 +151,7 @@ def main():
     print("=" * 60)
 
     # ── save ─────────────────────────────────────────────────────────────
-    bt.save_results(prefix=args.out_prefix)
+    bt.save_results(prefix=args.out_prefix, summary=report)
 
 
 if __name__ == "__main__":

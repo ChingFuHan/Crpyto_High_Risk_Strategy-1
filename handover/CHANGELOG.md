@@ -1,5 +1,88 @@
 # Handover / 智慧傳承
 
+## 2026-04-12 — Added 15m / 5m Raw History For Multi-Timeframe Work
+
+### What Changed
+- Downloaded full Binance USD-M raw OHLCV history for:
+  - `data/history/15m`
+  - `data/history/5m`
+- Both lower-timeframe directories now match the existing `1h` universe exactly:
+  - `538` symbols in `1h`
+  - `538` symbols in `15m`
+  - `538` symbols in `5m`
+- Updated `scripts/download_history.py`:
+  - added `--delay` so API pacing can be tuned from CLI
+  - made console output ASCII-safe to avoid Windows `cp950` crashes on:
+    - rate-limit messages
+    - non-ASCII symbol names
+
+### Data Footprint
+- `data/history/1h`  ≈ `0.585 GB`
+- `data/history/15m` ≈ `2.316 GB`
+- `data/history/5m`  ≈ `6.891 GB`
+
+### Validation
+- Verified universe parity:
+  - `15m` vs `1h`: no missing / extra symbols
+  - `5m` vs `1h`: no missing / extra symbols
+
+### Notes
+- 5m full-history download was accelerated by splitting the remaining symbol set into two non-overlapping batches after 15m completed
+- The lower-timeframe raw data is now ready for multi-timeframe feature engineering and signal gating
+
+## 2026-04-12 — Walk-Forward Validation For `tuned_long_only_3x_max5_v1`
+
+### What Changed
+- Extended `core/backtester.py` with prepared-data date slicing for reproducible train / validation windows
+- Extended `scripts/run_backtest.py` with `--start-date` / `--end-date`
+- `run_backtest` now also writes `{prefix}_summary.json`
+- Added backtester tests covering date slicing and inclusive date-only end boundaries
+
+### Walk-Forward Split
+- Train: `2019-09-09` → `2023-12-31`
+- Validate: `2024-01-01` → `2026-04-11`
+
+### Key Result
+- The tuned long-only 3x / max-5 config stayed positive out of sample, which argues against a total curve-fit failure
+- But performance compressed a lot in validation, so the edge looks materially weaker than the in-sample headline
+
+### Metrics
+- Train:
+  - Final capital: `1543.40 USDT`
+  - Return: `+208.68%`
+  - Annualized return: `+29.88%`
+  - Sharpe ratio: `0.76`
+  - Calmar ratio: `1.13`
+  - Profit factor: `1.06`
+  - Max drawdown: `26.4%`
+  - Trades: `5751`
+- Validate:
+  - Final capital: `559.26 USDT`
+  - Return: `+11.85%`
+  - Annualized return: `+5.04%`
+  - Sharpe ratio: `0.39`
+  - Calmar ratio: `0.19`
+  - Profit factor: `1.02`
+  - Max drawdown: `26.5%`
+  - Trades: `4107`
+
+### Important Caveat
+- Validation used a much larger live-era universe than training (`533` enabled symbols vs `180` in train), because many symbols only list later
+- That makes this a realistic forward test, but not a clean apples-to-apples parameter-stability test by symbol set
+- The next useful check is a fixed-universe walk-forward or a listing-age filter
+
+### Validation
+- `python -m pytest -q` → `8 passed`
+
+### Artifacts
+- `data/wf_tuned_long_only_3x_max5_v1_train_summary.json`
+- `data/wf_tuned_long_only_3x_max5_v1_train_trades.csv`
+- `data/wf_tuned_long_only_3x_max5_v1_train_equity.csv`
+- `data/wf_tuned_long_only_3x_max5_v1_validate_summary.json`
+- `data/wf_tuned_long_only_3x_max5_v1_validate_trades.csv`
+- `data/wf_tuned_long_only_3x_max5_v1_validate_equity.csv`
+- `data/walkforward_tuned_long_only_3x_max5_v1.json`
+
 ## 2026-04-11 — Audit / Validate / Fix Pass
 
 ### Findings Fixed

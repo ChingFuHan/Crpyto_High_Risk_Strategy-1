@@ -18,6 +18,7 @@ Usage (via run_backtest.py):
     python -m scripts.run_backtest --data data/history/1h --capital 500
 """
 
+import json
 import os
 import re
 import numpy as np
@@ -198,6 +199,16 @@ class Backtester:
         if np.isinf(value):
             return "∞"
         return round(float(value), 2)
+
+    @staticmethod
+    def _normalize_date_boundary(value: Optional[str], is_end: bool = False) -> Optional[pd.Timestamp]:
+        if value is None:
+            return None
+        ts = pd.Timestamp(value)
+        if len(value) == 10 and value[4] == "-" and value[7] == "-":
+            if is_end:
+                ts = ts + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
+        return ts
 
     def _compute_period_stats(self, initial_capital: float, final_capital: float) -> dict:
         if (
@@ -451,6 +462,74 @@ class Backtester:
             "timeline": timeline,
         }
 
+    @classmethod
+    def slice_prepared(
+        cls,
+        prepared: dict,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> dict:
+        """Return a prepared-market snapshot filtered to the requested date window."""
+        if "error" in prepared:
+            return prepared
+
+        try:
+            start_ts = cls._normalize_date_boundary(start_date, is_end=False)
+            end_ts = cls._normalize_date_boundary(end_date, is_end=True)
+        except (TypeError, ValueError) as exc:
+            return {"error": f"invalid date range: {exc}"}
+
+        if start_ts is not None and end_ts is not None and start_ts > end_ts:
+            return {"error": "start_date after end_date"}
+
+        timeline_values = np.asarray(prepared["timeline"], dtype=object)
+        timeline_mask = np.ones(len(timeline_values), dtype=bool)
+        if start_ts is not None or end_ts is not None:
+            timeline_ts = pd.to_datetime(timeline_values)
+            if start_ts is not None:
+                timeline_mask &= timeline_ts >= start_ts
+            if end_ts is not None:
+                timeline_mask &= timeline_ts <= end_ts
+
+        if not timeline_mask.any():
+            return {"error": "no data in selected date range"}
+
+        sliced_timeline = timeline_values[timeline_mask].tolist()
+        sliced_symbols: Dict[str, dict] = {}
+        for sym, data in prepared["symbols"].items():
+            dates = pd.to_datetime(data["da"])
+            sym_mask = np.ones(data["n"], dtype=bool)
+            if start_ts is not None:
+                sym_mask &= dates >= start_ts
+            if end_ts is not None:
+                sym_mask &= dates <= end_ts
+            if not sym_mask.any():
+                continue
+
+            sliced = {}
+            for key, values in data.items():
+                if key == "n":
+                    continue
+                sliced[key] = values[sym_mask]
+            sliced["n"] = int(sym_mask.sum())
+            sliced_symbols[sym] = sliced
+
+        if not sliced_symbols:
+            return {"error": "no symbol data in selected date range"}
+
+        timeline_set = set(sliced_timeline)
+        sliced_regime = {
+            da: flag
+            for da, flag in prepared.get("btc_regime", {}).items()
+            if da in timeline_set
+        }
+
+        return {
+            "symbols": sliced_symbols,
+            "btc_regime": sliced_regime,
+            "timeline": sliced_timeline,
+        }
+
     def run(self, data_dir: str = "data/history/1h") -> dict:
         """Load data, simulate bar-by-bar, return performance report."""
         prepared = self.prepare_data(data_dir)
@@ -700,8 +779,15 @@ class Backtester:
 
     # ── persist results ───────────────────────────────────────────────────
 
-    def save_results(self, out_dir: str = "data", prefix: str = "backtest"):
+    def save_results(self, out_dir: str = "data", prefix: str = "backtest", summary: Optional[dict] = None):
         os.makedirs(out_dir, exist_ok=True)
+        if summary is None:
+            summary = self._report()
+        if summary is not None:
+            p = os.path.join(out_dir, f"{prefix}_summary.json")
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(summary, f, indent=2, ensure_ascii=False)
+            print(f"  Summary → {p}")
         if self.trades:
             df = pd.DataFrame([vars(t) for t in self.trades])
             p = os.path.join(out_dir, f"{prefix}_trades.csv")
