@@ -1,0 +1,165 @@
+{
+  "timeframe": "mtf_1h_15m_5m",
+  "best_config": {
+    "initial_capital": 500.0,
+    "max_positions": 5,
+    "fixed_leverage": 3,
+    "fee_rate": 0.0008,
+    "slippage_rate": 0.0005,
+    "funding_rate_worst": 0.0002,
+    "funding_rate_avg": 0.0001,
+    "funding_rate_blend_worst": 0.25,
+    "funding_rate_blend_avg": 0.75,
+    "min_close_ratio": 0.55,
+    "min_margin": 1.0,
+    "capital_floor": 10.0,
+    "require_standard_symbols": true,
+    "exclude_symbols": [
+      "BTCDOMUSDT",
+      "USDCUSDT"
+    ],
+    "equity_trail_pct": 0.25,
+    "profit_lock_mult": 1.5,
+    "profit_lock_ratio": 0.4,
+    "min_entry_score": 0.25,
+    "breakout_margin": 0.005,
+    "rsi_exit_max": 78,
+    "verbose": false,
+    "bar_minutes": 5,
+    "ema_fast": 108,
+    "ema_mid": 252,
+    "ema_slow": 600,
+    "ema_regime": 2400,
+    "rsi_period": 168,
+    "atr_period": 168,
+    "vol_ma_period": 240,
+    "breakout_lookback": 240,
+    "max_hold_bars": 288,
+    "cooldown_bars": 36,
+    "sl_atr_mult": {
+      "3": 5.0
+    },
+    "atr_floor_pct": 0.012,
+    "trailing_act_pct": 0.025,
+    "trailing_dist_pct": 0.01,
+    "rsi_entry_min": 60.0,
+    "rsi_entry_max": 72.0,
+    "volume_mult": 2.0,
+    "momentum_ranking": false,
+    "rr_mode": "trailing",
+    "reentry_enabled": false
+  },
+  "config_label": "MTF 1h+15m+5m trend alignment",
+  "screening": {
+    "avg_pf": 1.377,
+    "avg_ret": 70.0,
+    "avg_trades": 254,
+    "pfs": [
+      1.33,
+      1.6,
+      1.2
+    ],
+    "rets": [
+      18.69,
+      136.91,
+      54.48
+    ]
+  },
+  "baseline": {
+    "avg_pf": 1.373,
+    "avg_ret": 68.6
+  },
+  "walkforward": {
+    "results": [
+      {
+        "window": "WF1",
+        "train_period": "2021-01-01~2021-12-31",
+        "test_period": "2022-01-01~2022-06-30",
+        "train": {
+          "ret": 345.04,
+          "trades": 447,
+          "wr": 78.08,
+          "dd": 15.03,
+          "pf": 1.61,
+          "sharpe": 3.96
+        },
+        "test": {
+          "ret": 16.67,
+          "trades": 52,
+          "wr": 78.85,
+          "dd": 11.23,
+          "pf": 1.51,
+          "sharpe": 1.55
+        }
+      },
+      {
+        "window": "WF2",
+        "train_period": "2022-01-01~2022-12-31",
+        "test_period": "2023-01-01~2023-06-30",
+        "train": {
+          "ret": 18.69,
+          "trades": 81,
+          "wr": 75.31,
+          "dd": 13.44,
+          "pf": 1.33,
+          "sharpe": 0.9
+        },
+        "test": {
+          "ret": 21.57,
+          "trades": 51,
+          "wr": 74.51,
+          "dd": 13.47,
+          "pf": 1.48,
+          "sharpe": 1.24
+        }
+      },
+      {
+        "window": "WF3",
+        "train_period": "2023-01-01~2023-12-31",
+        "test_period": "2024-01-01~2024-06-30",
+        "train": {
+          "ret": 136.91,
+          "trades": 223,
+          "wr": 77.13,
+          "dd": 13.51,
+          "pf": 1.6,
+          "sharpe": 2.32
+        },
+        "test": {
+          "ret": -17.67,
+          "trades": 242,
+          "wr": 70.25,
+          "dd": 25.2,
+          "pf": 0.98,
+          "sharpe": -0.53
+        }
+      },
+      {
+        "window": "WF4",
+        "train_period": "2024-01-01~2024-12-31",
+        "test_period": "2025-01-01~2025-04-12",
+        "train": {
+          "ret": 54.48,
+          "trades": 459,
+          "wr": 74.73,
+          "dd": 25.2,
+          "pf": 1.2,
+          "sharpe": 1.17
+        },
+        "test": {
+          "ret": 51.27,
+          "trades": 101,
+          "wr": 73.27,
+          "dd": 16.39,
+          "pf": 1.59,
+          "sharpe": 1.97
+        }
+      }
+    ],
+    "avg_test_ret": 17.96,
+    "avg_test_pf": 1.39,
+    "oos_profitable": 3,
+    "oos_total": 4
+  },
+  "total_time_s": 2848.1
+}

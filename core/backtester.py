@@ -53,6 +53,9 @@ class BacktestConfig:
         (0.0, 3),
     ])
 
+    # ── bar size ─────────────────────────────────────────────────────────
+    bar_minutes: int = 60               # bar duration: 5, 15, or 60
+
     # ── indicators ────────────────────────────────────────────────────────
     ema_fast: int = 9
     ema_mid: int = 21
@@ -71,6 +74,21 @@ class BacktestConfig:
     min_entry_score: float = 0.0        # min momentum score to enter
     breakout_margin: float = 0.0        # require close > prev_hi*(1+margin)
     atr_floor_pct: float = 0.0          # skip entry if atr/price < floor
+
+    # ── momentum ranking entry (aggressive chase) ────────────────────────
+    momentum_ranking: bool = False       # fill empty slots with top gainers
+    momentum_lookback_hours: float = 24.0  # 24h/12h/8h lookback
+    momentum_min_gain_pct: float = 0.02  # minimum gain % to qualify
+    momentum_rsi_max: float = 85.0       # skip if RSI too high
+
+    # ── risk-reward exit mode ────────────────────────────────────────────
+    rr_mode: str = "trailing"            # "1:1", "1:2", "1:3", "trailing"
+
+    # ── re-entry mechanism (buyback on pullback) ─────────────────────────
+    reentry_enabled: bool = False
+    reentry_pullback_pct: float = 0.03   # price must drop X% from recent high
+    reentry_vol_mult: float = 2.0        # volume must be N× average
+    reentry_window_bars: int = 48        # lookback window for re-entry candidates
 
     # ── position sizing ──────────────────────────────────────────────────
     risk_per_trade: float = 0.15        # 15 % of capital per slot
@@ -116,6 +134,7 @@ class Position:
     highest_price: float
     entry_fee: float = 0.0              # tracked for accurate PnL
     bars_held: int = 0
+    take_profit: float = 0.0            # 0 = no fixed TP (trailing mode)
 
 
 @dataclass
@@ -160,6 +179,8 @@ class Backtester:
         self._timeline_start: Optional[pd.Timestamp] = None
         self._timeline_end: Optional[pd.Timestamp] = None
         self._bar_seconds: Optional[float] = None
+        # Re-entry tracking: {symbol: {exit_bar_idx, highest_price, exit_price}}
+        self._recent_exits: Dict[str, dict] = {}
 
     # ── vectorised indicator computation ──────────────────────────────────
 
@@ -324,6 +345,10 @@ class Backtester:
         # Rate of change (10 bars)
         df["roc"] = cl.pct_change(10)
 
+        # Momentum ranking ROC (for aggressive chase entry)
+        mom_bars = max(1, int(c.momentum_lookback_hours * 60 / max(c.bar_minutes, 1)))
+        df["mom_roc"] = cl.pct_change(mom_bars)
+
         # ── entry signal (vectorised boolean) ─────────────────────────────
         df["trend_up"] = (
             (cl > df["ema_f"])
@@ -378,30 +403,39 @@ class Backtester:
         sl_mult = self.cfg.sl_atr_mult.get(lev, 2.5)
         sl = price - sl_mult * atr
 
+        # Compute take-profit based on RR mode
+        tp = 0.0
+        risk = price - sl
+        if risk > 0 and self.cfg.rr_mode != "trailing":
+            rr_map = {"1:1": 1.0, "1:2": 2.0, "1:3": 3.0}
+            rr_mult = rr_map.get(self.cfg.rr_mode, 0.0)
+            if rr_mult > 0:
+                tp = price + risk * rr_mult
+
         self.capital -= (margin + fee + slippage)
         self.positions[sym] = Position(
             symbol=sym, entry_price=price, entry_time=da,
             leverage=lev, margin=margin, notional=notional,
             stop_loss=sl, trailing_stop=sl, highest_price=price,
-            entry_fee=fee + slippage,
+            entry_fee=fee + slippage, take_profit=tp,
         )
 
-    def _close(self, sym: str, exit_price: float, da: str, reason: str):
+    def _close(self, sym: str, exit_price: float, da: str, reason: str,
+               bar_idx: int = 0):
         pos = self.positions.pop(sym)
         chg = (exit_price - pos.entry_price) / pos.entry_price
         raw_pnl = pos.notional * chg
         exit_not = pos.notional * (exit_price / pos.entry_price)
         exit_fee = abs(exit_not) * self.cfg.fee_rate
         exit_slippage = abs(exit_not) * self.cfg.slippage_rate
-        
-        # Funding rate: blended worst(25%) + avg(75%), applied per bar (5-min)
-        # For 24h hold with 288 bars at 5m: funding_cost = blended_rate * leverage * days_held
-        bars_held = int(pos.bars_held) if hasattr(pos, 'bars_held') and pos.bars_held else 1
-        days_held = bars_held * 5 / (24 * 60)  # convert 5m bars to days
+
+        # Funding rate: blended worst/avg, adapted to bar_minutes
+        bars_held = int(pos.bars_held) if pos.bars_held else 1
+        days_held = bars_held * self.cfg.bar_minutes / (24 * 60)
         blended_funding_rate = (self.cfg.funding_rate_worst * self.cfg.funding_rate_blend_worst +
                                  self.cfg.funding_rate_avg * self.cfg.funding_rate_blend_avg)
         funding_cost = pos.notional * blended_funding_rate * pos.leverage * days_held
-        
+
         pnl = raw_pnl - exit_fee - exit_slippage - pos.entry_fee - funding_cost
 
         # Liquidation: loss cannot exceed margin
@@ -423,6 +457,14 @@ class Backtester:
         ))
         if reason in ("stop_loss", "liquidation"):
             self.cooldowns[sym] = self.cfg.cooldown_bars
+
+        # Track for re-entry mechanism
+        if self.cfg.reentry_enabled:
+            self._recent_exits[sym] = {
+                "exit_bar_idx": bar_idx,
+                "highest_price": pos.highest_price,
+                "exit_price": exit_price,
+            }
 
     # ── main simulation ──────────────────────────────────────────────────
 
@@ -471,6 +513,7 @@ class Backtester:
                 "cr": df["cr"].values.astype(float),
                 "trend_up": df["trend_up"].values.astype(bool),
                 "score": df["score"].values.astype(float),
+                "mom_roc": df["mom_roc"].values.astype(float),
                 "n":     len(df),
             }
 
@@ -655,13 +698,16 @@ class Backtester:
                         pos.trailing_stop = max(pos.trailing_stop, new_ts)
 
                 if lo <= pos.stop_loss:
-                    self._close(sym, pos.stop_loss, t, "stop_loss"); continue
+                    self._close(sym, pos.stop_loss, t, "stop_loss", bi); continue
                 if pos.trailing_stop > pos.stop_loss and lo <= pos.trailing_stop:
-                    self._close(sym, pos.trailing_stop, t, "trailing_stop"); continue
+                    self._close(sym, pos.trailing_stop, t, "trailing_stop", bi); continue
+                # Take-profit exit (RR mode 1:1/1:2/1:3)
+                if pos.take_profit > 0 and hi >= pos.take_profit:
+                    self._close(sym, pos.take_profit, t, "take_profit", bi); continue
                 if pos.bars_held >= self.cfg.max_hold_bars:
-                    self._close(sym, cl, t, "max_hold"); continue
+                    self._close(sym, cl, t, "max_hold", bi); continue
                 if rsi > self.cfg.rsi_exit_max:
-                    self._close(sym, cl, t, "rsi_exhaustion"); continue
+                    self._close(sym, cl, t, "rsi_exhaustion", bi); continue
 
             # ── equity snapshot (before entries) ─────────────────────────
             equity = self.capital + self.locked_profit
@@ -702,7 +748,7 @@ class Backtester:
                         cl_v = sym_data[sym]["cl"][active[sym]]
                     else:
                         cl_v = self.positions[sym].entry_price
-                    self._close(sym, cl_v, t, "equity_stop")
+                    self._close(sym, cl_v, t, "equity_stop", bi)
                 self.paused = True
 
             # ── entries ───────────────────────────────────────────────────
@@ -731,6 +777,73 @@ class Backtester:
                     if self.capital < self.cfg.capital_floor:
                         break
 
+            # ── momentum ranking entry (fill remaining slots) ────────────
+            if (allow_entry and self.cfg.momentum_ranking
+                    and len(self.positions) < self.cfg.max_positions
+                    and self.capital >= self.cfg.capital_floor):
+                mom_cands = []
+                for sym, idx in active.items():
+                    if sym in self.positions or sym in self.cooldowns:
+                        continue
+                    if sym == "BTCUSDT":
+                        continue
+                    d = sym_data[sym]
+                    mom = d["mom_roc"][idx]
+                    rsi_v = d["rsi"][idx]
+                    vol_v = d["vol_r"][idx]
+                    if (np.isnan(mom) or np.isnan(rsi_v) or np.isnan(vol_v)):
+                        continue
+                    if (mom >= self.cfg.momentum_min_gain_pct
+                            and rsi_v < self.cfg.momentum_rsi_max
+                            and vol_v >= 1.0
+                            and d["trend_up"][idx]):
+                        mom_cands.append((sym, idx, mom))
+                mom_cands.sort(key=lambda x: x[2], reverse=True)
+                slots = self.cfg.max_positions - len(self.positions)
+                for sym, idx, _ in mom_cands[:slots]:
+                    d = sym_data[sym]
+                    atr_v = d["atr"][idx]
+                    if np.isnan(atr_v) or atr_v <= 0:
+                        continue
+                    self._open(sym, d["cl"][idx], atr_v, d["score"][idx], t)
+                    if self.capital < self.cfg.capital_floor:
+                        break
+
+            # ── re-entry mechanism (buyback on pullback with volume) ──────
+            if (allow_entry and self.cfg.reentry_enabled
+                    and len(self.positions) < self.cfg.max_positions
+                    and self.capital >= self.cfg.capital_floor):
+                expired = []
+                for sym, info in self._recent_exits.items():
+                    if bi - info["exit_bar_idx"] > self.cfg.reentry_window_bars:
+                        expired.append(sym)
+                        continue
+                    if sym in self.positions or sym not in active:
+                        continue
+                    idx = active[sym]
+                    d = sym_data[sym]
+                    cl_v = d["cl"][idx]
+                    vol_v = d["vol_r"][idx]
+                    rsi_v = d["rsi"][idx]
+                    if np.isnan(vol_v) or np.isnan(rsi_v):
+                        continue
+                    pullback = (info["highest_price"] - cl_v) / info["highest_price"]
+                    if (pullback >= self.cfg.reentry_pullback_pct
+                            and vol_v >= self.cfg.reentry_vol_mult
+                            and d["trend_up"][idx]
+                            and rsi_v < self.cfg.rsi_entry_max):
+                        atr_v = d["atr"][idx]
+                        if not np.isnan(atr_v) and atr_v > 0:
+                            # Override cooldown for re-entry
+                            if sym in self.cooldowns:
+                                del self.cooldowns[sym]
+                            self._open(sym, cl_v, atr_v, d["score"][idx], t)
+                            expired.append(sym)
+                            if self.capital < self.cfg.capital_floor:
+                                break
+                for sym in expired:
+                    self._recent_exits.pop(sym, None)
+
             # ── record equity curve ───────────────────────────────────────
             self._equity_points.append(float(equity))
             if bi % 100 == 0:
@@ -744,7 +857,8 @@ class Backtester:
         # 5 — close remaining positions ----------------------------------------
         for sym in list(self.positions):
             d = sym_data[sym]
-            self._close(sym, d["cl"][d["n"] - 1], d["da"][d["n"] - 1], "end_of_test")
+            self._close(sym, d["cl"][d["n"] - 1], d["da"][d["n"] - 1],
+                        "end_of_test", n_bars - 1)
 
         final_equity = float(self.capital + self.locked_profit)
         if not self._equity_points or abs(self._equity_points[-1] - final_equity) > 1e-9:
