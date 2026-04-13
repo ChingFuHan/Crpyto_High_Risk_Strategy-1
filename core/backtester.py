@@ -36,7 +36,12 @@ from pathlib import Path
 class BacktestConfig:
     initial_capital: float = 500.0
     max_positions: int = 5
-    fee_rate: float = 0.0004            # 0.04 % taker per side
+    fee_rate: float = 0.0008            # 0.08% taker per side
+    slippage_rate: float = 0.0005       # 0.05% slippage per side
+    funding_rate_worst: float = 0.0002  # 0.02% worst case per 8h (annualized ~2.6%)
+    funding_rate_avg: float = 0.0001    # 0.01% average case per 8h (annualized ~1.3%)
+    funding_rate_blend_worst: float = 0.25  # weight for worst case
+    funding_rate_blend_avg: float = 0.75    # weight for average case
     fixed_leverage: Optional[int] = None
     verbose: bool = True
 
@@ -369,15 +374,16 @@ class Backtester:
 
         notional = margin * lev
         fee = notional * self.cfg.fee_rate
+        slippage = notional * self.cfg.slippage_rate
         sl_mult = self.cfg.sl_atr_mult.get(lev, 2.5)
         sl = price - sl_mult * atr
 
-        self.capital -= (margin + fee)
+        self.capital -= (margin + fee + slippage)
         self.positions[sym] = Position(
             symbol=sym, entry_price=price, entry_time=da,
             leverage=lev, margin=margin, notional=notional,
             stop_loss=sl, trailing_stop=sl, highest_price=price,
-            entry_fee=fee,
+            entry_fee=fee + slippage,
         )
 
     def _close(self, sym: str, exit_price: float, da: str, reason: str):
@@ -386,7 +392,17 @@ class Backtester:
         raw_pnl = pos.notional * chg
         exit_not = pos.notional * (exit_price / pos.entry_price)
         exit_fee = abs(exit_not) * self.cfg.fee_rate
-        pnl = raw_pnl - exit_fee - pos.entry_fee
+        exit_slippage = abs(exit_not) * self.cfg.slippage_rate
+        
+        # Funding rate: blended worst(25%) + avg(75%), applied per bar (5-min)
+        # For 24h hold with 288 bars at 5m: funding_cost = blended_rate * leverage * days_held
+        bars_held = int(pos.bars_held) if hasattr(pos, 'bars_held') and pos.bars_held else 1
+        days_held = bars_held * 5 / (24 * 60)  # convert 5m bars to days
+        blended_funding_rate = (self.cfg.funding_rate_worst * self.cfg.funding_rate_blend_worst +
+                                 self.cfg.funding_rate_avg * self.cfg.funding_rate_blend_avg)
+        funding_cost = pos.notional * blended_funding_rate * pos.leverage * days_held
+        
+        pnl = raw_pnl - exit_fee - exit_slippage - pos.entry_fee - funding_cost
 
         # Liquidation: loss cannot exceed margin
         returned = pos.margin + pnl

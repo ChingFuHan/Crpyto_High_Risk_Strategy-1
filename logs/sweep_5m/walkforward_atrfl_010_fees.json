@@ -1,0 +1,207 @@
+{
+  "config_name": "atrfl_010",
+  "config": {
+    "initial_capital": 500.0,
+    "max_positions": 5,
+    "fixed_leverage": 3,
+    "fee_rate": 0.0008,
+    "slippage_rate": 0.0005,
+    "funding_rate_worst": 0.0002,
+    "funding_rate_avg": 0.0001,
+    "funding_rate_blend_worst": 0.25,
+    "funding_rate_blend_avg": 0.75,
+    "rsi_entry_min": 60.0,
+    "rsi_entry_max": 72.0,
+    "min_close_ratio": 0.55,
+    "min_margin": 1.0,
+    "capital_floor": 10.0,
+    "require_standard_symbols": true,
+    "exclude_symbols": [
+      "BTCDOMUSDT",
+      "USDCUSDT"
+    ],
+    "equity_trail_pct": 0.25,
+    "profit_lock_mult": 1.5,
+    "profit_lock_ratio": 0.4,
+    "ema_fast": 108,
+    "ema_mid": 252,
+    "ema_slow": 600,
+    "ema_regime": 2400,
+    "rsi_period": 168,
+    "atr_period": 168,
+    "vol_ma_period": 240,
+    "breakout_lookback": 240,
+    "volume_mult": 3.0,
+    "breakout_margin": 0.005,
+    "min_entry_score": 0.25,
+    "atr_floor_pct": 0.01,
+    "trailing_act_pct": 0.025,
+    "trailing_dist_pct": 0.01,
+    "sl_atr_mult": {
+      "3": 5.0
+    },
+    "max_hold_bars": 288,
+    "rsi_exit_max": 78,
+    "cooldown_bars": 36
+  },
+  "results": [
+    {
+      "window": "WF1",
+      "phase": "TRAIN",
+      "period": "2021-01-01~2021-12-31",
+      "final": 973.93,
+      "ret": 94.79,
+      "trades": 598,
+      "wr": 71.74,
+      "dd": 25.63,
+      "sharpe": 1.74,
+      "pf": 1.22,
+      "avg_hold": 7.8,
+      "exits": {
+        "trailing_stop": 429,
+        "stop_loss": 168,
+        "equity_stop": 1
+      },
+      "err": null
+    },
+    {
+      "window": "WF1",
+      "phase": "TEST",
+      "period": "2022-01-01~2022-06-30",
+      "final": 669.34,
+      "ret": 33.87,
+      "trades": 81,
+      "wr": 77.78,
+      "dd": 18.78,
+      "sharpe": 2.48,
+      "pf": 1.66,
+      "avg_hold": 11.3,
+      "exits": {
+        "trailing_stop": 63,
+        "stop_loss": 18
+      },
+      "err": null
+    },
+    {
+      "window": "WF2",
+      "phase": "TRAIN",
+      "period": "2022-01-01~2022-12-31",
+      "final": 670.78,
+      "ret": 34.16,
+      "trades": 136,
+      "wr": 70.59,
+      "dd": 21.32,
+      "sharpe": 1.29,
+      "pf": 1.34,
+      "avg_hold": 11.5,
+      "exits": {
+        "trailing_stop": 96,
+        "stop_loss": 40
+      },
+      "err": null
+    },
+    {
+      "window": "WF2",
+      "phase": "TEST",
+      "period": "2023-01-01~2023-06-30",
+      "final": 452.89,
+      "ret": -9.42,
+      "trades": 92,
+      "wr": 60.87,
+      "dd": 25.19,
+      "sharpe": -0.27,
+      "pf": 0.96,
+      "avg_hold": 17.5,
+      "exits": {
+        "trailing_stop": 56,
+        "stop_loss": 35,
+        "equity_stop": 1
+      },
+      "err": null
+    },
+    {
+      "window": "WF3",
+      "phase": "TRAIN",
+      "period": "2023-01-01~2023-12-31",
+      "final": 764.51,
+      "ret": 52.9,
+      "trades": 365,
+      "wr": 69.59,
+      "dd": 25.19,
+      "sharpe": 1.11,
+      "pf": 1.21,
+      "avg_hold": 12.6,
+      "exits": {
+        "trailing_stop": 254,
+        "stop_loss": 110,
+        "equity_stop": 1
+      },
+      "err": null
+    },
+    {
+      "window": "WF3",
+      "phase": "TEST",
+      "period": "2024-01-01~2024-06-30",
+      "final": 321.09,
+      "ret": -35.78,
+      "trades": 383,
+      "wr": 68.41,
+      "dd": 25.69,
+      "sharpe": -1.28,
+      "pf": 0.94,
+      "avg_hold": 13.3,
+      "exits": {
+        "stop_loss": 119,
+        "trailing_stop": 262,
+        "equity_stop": 2
+      },
+      "err": null
+    },
+    {
+      "window": "WF4",
+      "phase": "TRAIN",
+      "period": "2024-01-01~2024-12-31",
+      "final": 577.05,
+      "ret": 15.41,
+      "trades": 715,
+      "wr": 71.19,
+      "dd": 25.69,
+      "sharpe": 0.53,
+      "pf": 1.1,
+      "avg_hold": 10.6,
+      "exits": {
+        "stop_loss": 203,
+        "trailing_stop": 509,
+        "equity_stop": 3
+      },
+      "err": null
+    },
+    {
+      "window": "WF4",
+      "phase": "TEST",
+      "period": "2025-01-01~2025-04-12",
+      "final": 766.1,
+      "ret": 53.22,
+      "trades": 163,
+      "wr": 68.71,
+      "dd": 15.87,
+      "sharpe": 1.94,
+      "pf": 1.38,
+      "avg_hold": 13.8,
+      "exits": {
+        "trailing_stop": 112,
+        "stop_loss": 51
+      },
+      "err": null
+    }
+  ],
+  "summary": {
+    "avg_train_ret": 49.32,
+    "avg_test_ret": 10.47,
+    "avg_train_pf": 1.218,
+    "avg_test_pf": 1.235,
+    "oos_positive": 2,
+    "oos_total": 4
+  },
+  "total_time_s": 3128.6
+}

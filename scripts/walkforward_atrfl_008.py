@@ -1,11 +1,5 @@
 """
-scripts/walkforward_5m.py – Walk-forward validation for best 5m config.
-
-Splits history into train/test windows and validates OOS performance.
-Uses the best config from R3 sweep.
-
-Usage:
-    python -m scripts.walkforward_5m
+Walk-forward test for atrfl_008 (balanced: moderate PF, moderate trades).
 """
 import sys, time, json
 from pathlib import Path
@@ -14,16 +8,16 @@ from core.backtester import Backtester, BacktestConfig
 DATA_DIR = "data/history/5m"
 OUT_DIR  = Path("logs/sweep_5m")
 
-# ── R3 winner: trail_20_8 (RSI 60-72 + ATR floor 0.6% + tight trail 2%/0.8%) ──
-# WITH FEES: 0.08% taker + 0.05% slippage + blended funding rate
-BEST_CONFIG = dict(
+# atrfl_008: ATR floor 0.8% = balanced trade frequency
+# R3 results: +229.5% / +87.3% / +161.3%, PF 1.25-1.32, ~600-700 trades/6mo
+ATRFL_008_CONFIG = dict(
     initial_capital=500.0,
     max_positions=5,
     fixed_leverage=3,
-    fee_rate=0.0008,                    # 0.08% per side (taker)
-    slippage_rate=0.0005,               # 0.05% per side
-    funding_rate_worst=0.0002,          # worst case: 0.02% per 8h
-    funding_rate_avg=0.0001,            # avg case: 0.01% per 8h
+    fee_rate=0.0008,
+    slippage_rate=0.0005,
+    funding_rate_worst=0.0002,
+    funding_rate_avg=0.0001,
     funding_rate_blend_worst=0.25,
     funding_rate_blend_avg=0.75,
     rsi_entry_min=60.0,
@@ -42,9 +36,9 @@ BEST_CONFIG = dict(
     volume_mult=3.0,
     breakout_margin=0.005,
     min_entry_score=0.25,
-    atr_floor_pct=0.006,
-    trailing_act_pct=0.020,
-    trailing_dist_pct=0.008,
+    atr_floor_pct=0.008,  # 0.8% (vs 1.0% for atrfl_010, 0.6% for trail_20_8)
+    trailing_act_pct=0.025,
+    trailing_dist_pct=0.01,
     sl_atr_mult={3: 5.0},
     max_hold_bars=288,
     rsi_exit_max=78,
@@ -52,18 +46,12 @@ BEST_CONFIG = dict(
     verbose=False,
 )
 
-# Walk-forward windows: (train_start, train_end, test_start, test_end)
 WALK_FORWARD_WINDOWS = [
-    # WF1: Train on 2021, test on 2022-H1
     ("2021-01-01", "2021-12-31", "2022-01-01", "2022-06-30"),
-    # WF2: Train on 2022, test on 2023-H1
     ("2022-01-01", "2022-12-31", "2023-01-01", "2023-06-30"),
-    # WF3: Train on 2023, test on 2024-H1
     ("2023-01-01", "2023-12-31", "2024-01-01", "2024-06-30"),
-    # WF4: Train on 2024, test on 2025-Q1
     ("2024-01-01", "2024-12-31", "2025-01-01", "2025-04-12"),
 ]
-
 
 def extract(result):
     if "error" in result:
@@ -82,29 +70,23 @@ def extract(result):
         err     = None,
     )
 
-
 def fmt(v):
     if v is None: return "   N/A"
     return f"{v:>6.2f}"
 
-
-def run(config_overrides=None):
+def run():
     t0 = time.time()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-    cfg_dict = {**BEST_CONFIG}
-    if config_overrides:
-        cfg_dict.update(config_overrides)
-
-    cfg = BacktestConfig(**cfg_dict)
+    cfg = BacktestConfig(**ATRFL_008_CONFIG)
 
     print("=" * 70)
-    print("  WALK-FORWARD VALIDATION — 5m Best Config")
+    print("  WALK-FORWARD VALIDATION — atrfl_008 (Balanced Config)")
     print("=" * 70)
     print(f"  Config: RSI {cfg.rsi_entry_min}-{cfg.rsi_entry_max}, "
           f"ATR floor {cfg.atr_floor_pct}, trail {cfg.trailing_act_pct}/{cfg.trailing_dist_pct}")
+    print(f"  Fees: {cfg.fee_rate*100:.2f}% taker, {cfg.slippage_rate*100:.2f}% slippage, "
+          f"funding {cfg.funding_rate_avg*100:.3f}% avg + {cfg.funding_rate_worst*100:.3f}% worst (blend {cfg.funding_rate_blend_avg:.0%}/{cfg.funding_rate_blend_worst:.0%})")
 
-    # load data
     bt_load = Backtester(cfg)
     prepared = bt_load.prepare_data(DATA_DIR)
     print(f"  Data loaded in {time.time()-t0:.0f}s")
@@ -117,29 +99,25 @@ def run(config_overrides=None):
     print(f"  {'-'*85}")
 
     for i, (tr_s, tr_e, te_s, te_e) in enumerate(WALK_FORWARD_WINDOWS, 1):
-        # Train
         ts = time.time()
         sl_train = Backtester.slice_prepared(prepared, tr_s, tr_e)
         bt = Backtester(cfg)
         raw_train = bt.run_prepared(sl_train)
         el = time.time() - ts
         m = extract(raw_train)
-        results.append({"window": f"WF{i}", "phase": "TRAIN",
-                        "period": f"{tr_s}~{tr_e}", **m})
+        results.append({"window": f"WF{i}", "phase": "TRAIN", "period": f"{tr_s}~{tr_e}", **m})
         print(f"  WF{i:<7} {'TRAIN':<6} {tr_s}~{tr_e:<12} {m['final']:>7.1f} "
               f"{m['ret']:>7.1f} {m['trades']:>5} {m['wr']:>5.1f} {m['dd']:>5.1f} "
               f"{fmt(m['sharpe'])} {fmt(m['pf'])}  {el:.0f}s")
         del sl_train
 
-        # Test (OOS)
         ts = time.time()
         sl_test = Backtester.slice_prepared(prepared, te_s, te_e)
         bt2 = Backtester(cfg)
         raw_test = bt2.run_prepared(sl_test)
         el = time.time() - ts
         m = extract(raw_test)
-        results.append({"window": f"WF{i}", "phase": "TEST",
-                        "period": f"{te_s}~{te_e}", **m})
+        results.append({"window": f"WF{i}", "phase": "TEST", "period": f"{te_s}~{te_e}", **m})
         print(f"  {'':>9} {'TEST':<6} {te_s}~{te_e:<12} {m['final']:>7.1f} "
               f"{m['ret']:>7.1f} {m['trades']:>5} {m['wr']:>5.1f} {m['dd']:>5.1f} "
               f"{fmt(m['sharpe'])} {fmt(m['pf'])}  {el:.0f}s")
@@ -147,7 +125,6 @@ def run(config_overrides=None):
 
     del prepared
 
-    # Summary
     total = time.time() - t0
     train_results = [r for r in results if r["phase"] == "TRAIN"]
     test_results  = [r for r in results if r["phase"] == "TEST"]
@@ -158,17 +135,18 @@ def run(config_overrides=None):
     oos_positive  = sum(1 for r in test_results if r["ret"] > 0)
 
     print(f"\n{'='*70}")
-    print(f"  WALK-FORWARD SUMMARY")
+    print(f"  WALK-FORWARD SUMMARY (atrfl_008 WITH FEES)")
     print(f"{'='*70}")
     print(f"  Avg TRAIN return: {avg_train_ret:>+7.1f}%  PF: {avg_train_pf:.2f}")
     print(f"  Avg TEST  return: {avg_test_ret:>+7.1f}%  PF: {avg_test_pf:.2f}")
     print(f"  OOS profitable:   {oos_positive}/{len(test_results)} windows")
     print(f"  Total time:       {total:.0f}s ({total/60:.1f}m)")
 
-    out_file = OUT_DIR / "walkforward_results.json"
+    out_file = OUT_DIR / "walkforward_atrfl_008_fees.json"
     with open(out_file, "w", encoding="utf-8") as f:
         json.dump({
-            "config": {k: v for k, v in cfg_dict.items() if k != "verbose"},
+            "config_name": "atrfl_008",
+            "config": {k: v for k, v in ATRFL_008_CONFIG.items() if k != "verbose"},
             "results": results,
             "summary": {
                 "avg_train_ret": round(avg_train_ret, 2),
@@ -181,7 +159,6 @@ def run(config_overrides=None):
             "total_time_s": round(total, 1),
         }, f, indent=2, default=str)
     print(f"  Results → {out_file}")
-
 
 if __name__ == "__main__":
     run()
