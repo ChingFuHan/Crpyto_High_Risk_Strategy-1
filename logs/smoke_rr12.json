@@ -1,0 +1,36 @@
+{
+  "initial_capital": 500.0,
+  "final_capital": 480.48,
+  "locked_profit": 0.0,
+  "trading_capital": 480.48,
+  "total_pnl": -19.52,
+  "return_pct": -3.9,
+  "annualized_return_pct": -0.6,
+  "sharpe_ratio": -0.08,
+  "calmar_ratio": -0.04,
+  "total_trades": 7,
+  "wins": 2,
+  "losses": 5,
+  "win_rate": 28.57,
+  "avg_win": 49.46,
+  "avg_loss": -23.29,
+  "profit_factor": 0.85,
+  "max_drawdown_pct": 15.58,
+  "avg_hold_bars": 34.0,
+  "exit_reasons": {
+    "stop_loss": 5,
+    "take_profit": 2
+  },
+  "leverage_dist": {
+    "3x": 7
+  },
+  "top_symbols_pnl": {
+    "RLCUSDT": -17.53
+  },
+  "worst_symbols_pnl": {
+    "RLCUSDT": -17.53
+  },
+  "smoke_symbol": "RLCUSDT",
+  "rr_mode": "1:2",
+  "data_dir": "data\\history\\15m_smoke_rlc"
+}
