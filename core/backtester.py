@@ -689,13 +689,14 @@ class Backtester:
                 cl = d["cl"][idx]
                 rsi = d["rsi"][idx]
 
-                # trailing-stop update
-                if hi > pos.highest_price:
-                    pos.highest_price = hi
-                    pft = (hi - pos.entry_price) / pos.entry_price
-                    if pft >= self.cfg.trailing_act_pct:
-                        new_ts = hi * (1 - self.cfg.trailing_dist_pct)
-                        pos.trailing_stop = max(pos.trailing_stop, new_ts)
+                # trailing-stop update (only for trailing rr_mode)
+                if self.cfg.rr_mode == "trailing":
+                    if hi > pos.highest_price:
+                        pos.highest_price = hi
+                        pft = (hi - pos.entry_price) / pos.entry_price
+                        if pft >= self.cfg.trailing_act_pct:
+                            new_ts = hi * (1 - self.cfg.trailing_dist_pct)
+                            pos.trailing_stop = max(pos.trailing_stop, new_ts)
 
                 if lo <= pos.stop_loss:
                     self._close(sym, pos.stop_loss, t, "stop_loss", bi); continue
