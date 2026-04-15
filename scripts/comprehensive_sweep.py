@@ -7,6 +7,7 @@ Phase 3: Walk-forward validate top configs
 Uses PF as primary screening metric, multiple 1-year windows.
 """
 import sys, time, json, gc
+from datetime import date, datetime
 from pathlib import Path
 from core.backtester import Backtester, BacktestConfig
 
@@ -50,18 +51,8 @@ COMMON = dict(
     verbose=False,
 )
 
-SCREEN_WINDOWS = [
-    ("2022-01-01", "2022-12-31"),
-    ("2023-01-01", "2023-12-31"),
-    ("2024-01-01", "2024-12-31"),
-]
-
-WF_WINDOWS = [
-    ("2021-01-01", "2021-12-31", "2022-01-01", "2022-06-30"),
-    ("2022-01-01", "2022-12-31", "2023-01-01", "2023-06-30"),
-    ("2023-01-01", "2023-12-31", "2024-01-01", "2024-06-30"),
-    ("2024-01-01", "2024-12-31", "2025-01-01", "2025-04-12"),
-]
+SCREEN_START_YEAR = 2022
+WF_TRAIN_START_YEAR = 2021
 
 ATR_FLOORS = [0.0, 0.005, 0.008, 0.010, 0.012, 0.015, 0.020]
 MIN_TRADES_PER_YEAR = 30  # Minimum trades for statistical significance
@@ -84,6 +75,42 @@ MOMENTUM_LOOKBACKS = [8.0, 12.0, 24.0]
 RR_MODES = ["trailing", "1:1", "1:2", "1:3"]
 
 
+def _to_date(value):
+    return datetime.fromisoformat(str(value)).date()
+
+
+def _last_completed_year(latest_date):
+    if latest_date.month == 12 and latest_date.day == 31:
+        return latest_date.year
+    return latest_date.year - 1
+
+
+def build_screen_windows(latest_date):
+    last_full_year = _last_completed_year(latest_date)
+    return [
+        (f"{year}-01-01", f"{year}-12-31")
+        for year in range(SCREEN_START_YEAR, last_full_year + 1)
+    ]
+
+
+def build_wf_windows(latest_date):
+    last_full_year = _last_completed_year(latest_date)
+    windows = []
+    for train_year in range(WF_TRAIN_START_YEAR, last_full_year + 1):
+        test_year = train_year + 1
+        test_start = date(test_year, 1, 1)
+        if latest_date < test_start:
+            break
+        test_end = min(date(test_year, 6, 30), latest_date)
+        windows.append((
+            f"{train_year}-01-01",
+            f"{train_year}-12-31",
+            test_start.isoformat(),
+            test_end.isoformat(),
+        ))
+    return windows
+
+
 def extract(result):
     if "error" in result:
         return dict(ret=-100, trades=0, wr=0, dd=100, pf=0, sharpe=None)
@@ -99,11 +126,20 @@ def extract(result):
     )
 
 
-def screen_multi(cfg_dict, prepared, windows=None):
+def screen_multi(cfg_dict, prepared, windows):
     """Screen on multiple 1-year windows; return avg PF and avg return."""
-    wins = windows or SCREEN_WINDOWS
+    if not windows:
+        return {
+            "avg_pf": 0.0,
+            "avg_ret": -100.0,
+            "avg_trades": 0,
+            "pfs": [],
+            "rets": [],
+            "min_pf": 0.0,
+            "quality": 0.0,
+        }
     pfs, rets, trades_all = [], [], []
-    for s, e in wins:
+    for s, e in windows:
         bt = Backtester(BacktestConfig(**cfg_dict))
         sl = Backtester.slice_prepared(prepared, s, e)
         raw = bt.run_prepared(sl)
@@ -128,9 +164,17 @@ def screen_multi(cfg_dict, prepared, windows=None):
     }
 
 
-def walkforward(cfg_dict, prepared):
+def walkforward(cfg_dict, prepared, windows):
+    if not windows:
+        return {
+            "results": [],
+            "avg_test_ret": -100.0,
+            "avg_test_pf": 0.0,
+            "oos_profitable": 0,
+            "oos_total": 0,
+        }
     results = []
-    for i, (tr_s, tr_e, te_s, te_e) in enumerate(WF_WINDOWS, 1):
+    for i, (tr_s, tr_e, te_s, te_e) in enumerate(windows, 1):
         sl_train = Backtester.slice_prepared(prepared, tr_s, tr_e)
         bt = Backtester(BacktestConfig(**cfg_dict))
         raw = bt.run_prepared(sl_train)
@@ -169,12 +213,8 @@ def run_timeframe(tf_name):
     tf = TIMEFRAME_PARAMS[tf_name]
     data_dir = tf["data_dir"]
 
-    # For 5m, use single-window fast screening in Phase 1 to cut time by 3x
-    fast_mode = (tf_name == "5m")
-    fast_wins = [("2023-01-01", "2023-12-31")] if fast_mode else None
-
     print(f"\n{'='*80}")
-    print(f"  TIMEFRAME: {tf_name}" + ("  [FAST MODE: single-window Phase 1]" if fast_mode else ""))
+    print(f"  TIMEFRAME: {tf_name}")
     print(f"{'='*80}")
 
     base = {**COMMON, **{k: v for k, v in tf.items() if k != "data_dir"}}
@@ -191,8 +231,22 @@ def run_timeframe(tf_name):
         return None
     del bt_load
 
+    data_start = _to_date(prepared["timeline"][0])
+    data_end = _to_date(prepared["timeline"][-1])
+    screen_windows = build_screen_windows(data_end)
+    wf_windows = build_wf_windows(data_end)
+
+    # For 5m, use the latest completed screening year in Phase 1 to cut time.
+    fast_mode = (tf_name == "5m" and bool(screen_windows))
+    phase1_windows = [screen_windows[-1]] if fast_mode else screen_windows
+    if fast_mode:
+        print(f"  Phase 1 fast mode window: {phase1_windows[0][0]}~{phase1_windows[0][1]}")
+    print(f"  Data period: {data_start.isoformat()} ~ {data_end.isoformat()}")
+    print(f"  Screening windows: {', '.join(f'{s}~{e}' for s, e in screen_windows)}")
+    print(f"  WF windows: {', '.join(f'{tr_s}~{tr_e}->{te_s}~{te_e}' for tr_s, tr_e, te_s, te_e in wf_windows)}")
+
     all_results = {}
-    scr = lambda cfg: screen_multi(cfg, prepared, windows=fast_wins)
+    scr = lambda cfg: screen_multi(cfg, prepared, windows=phase1_windows)
 
     # PHASE 1: Greedy parameter search
     print(f"\n  --- PHASE 1: Base Parameter Search ---")
@@ -270,8 +324,8 @@ def run_timeframe(tf_name):
         "momentum_ranking": False, "rr_mode": "trailing", "reentry_enabled": False,
     }
     # Full 3-window confirmation of best base
-    s = screen_multi(best_base, prepared)
-    print(f"\n  * Best base (3-window): avgPF={s['avg_pf']:.3f} Q={s['quality']:.3f} ret={s['avg_ret']:>+6.1f}% trades={s['avg_trades']}")
+    s = screen_multi(best_base, prepared, windows=screen_windows)
+    print(f"\n  * Best base ({len(screen_windows)}-window): avgPF={s['avg_pf']:.3f} Q={s['quality']:.3f} ret={s['avg_ret']:>+6.1f}% trades={s['avg_trades']}")
     all_results["base_best"] = {**best_base, **s}
 
     # PHASE 2: Features
@@ -283,7 +337,7 @@ def run_timeframe(tf_name):
     best_mom_q = s['quality']
     for hours in MOMENTUM_LOOKBACKS:
         cfg = {**best_base, "momentum_ranking": True, "momentum_lookback_hours": hours}
-        sm = screen_multi(cfg, prepared)
+        sm = screen_multi(cfg, prepared, windows=screen_windows)
         tag = f"mom_{int(hours)}h"
         print(f"    {tag}: PF={sm['avg_pf']:.3f} Q={sm['quality']:.3f} ret={sm['avg_ret']:>+6.1f}% trades={sm['avg_trades']}")
         all_results[tag] = {**cfg, **sm}
@@ -298,7 +352,7 @@ def run_timeframe(tf_name):
     best_rr_q = best_mom_q
     for rr in RR_MODES:
         cfg = {**best_mom_cfg, "rr_mode": rr}
-        sm = screen_multi(cfg, prepared)
+        sm = screen_multi(cfg, prepared, windows=screen_windows)
         tag = f"rr_{rr.replace(':', '')}"
         print(f"    {tag}: PF={sm['avg_pf']:.3f} Q={sm['quality']:.3f} ret={sm['avg_ret']:>+6.1f}% trades={sm['avg_trades']}")
         all_results[tag] = {**cfg, **sm}
@@ -313,7 +367,7 @@ def run_timeframe(tf_name):
     best_final_q = best_rr_q
     for reentry in [False, True]:
         cfg = {**best_rr_cfg, "reentry_enabled": reentry}
-        sm = screen_multi(cfg, prepared)
+        sm = screen_multi(cfg, prepared, windows=screen_windows)
         tag = f"reentry_{'on' if reentry else 'off'}"
         print(f"    {tag}: PF={sm['avg_pf']:.3f} Q={sm['quality']:.3f} ret={sm['avg_ret']:>+6.1f}% trades={sm['avg_trades']}")
         all_results[tag] = {**cfg, **sm}
@@ -321,12 +375,12 @@ def run_timeframe(tf_name):
             best_final_q = sm['quality']
             best_final_cfg = cfg.copy()
 
-    s = screen_multi(best_final_cfg, prepared)
+    s = screen_multi(best_final_cfg, prepared, windows=screen_windows)
     print(f"\n  * Final best: PF={s['avg_pf']:.3f} Q={s['quality']:.3f} ret={s['avg_ret']:>+6.1f}% trades={s['avg_trades']}")
 
     # PHASE 3: Walk-forward
     print(f"\n  --- PHASE 3: Walk-Forward Validation ---")
-    wf = walkforward(best_final_cfg, prepared)
+    wf = walkforward(best_final_cfg, prepared, windows=wf_windows)
     print(f"    Avg OOS return: {wf['avg_test_ret']:+.1f}%  PF: {wf['avg_test_pf']:.2f}")
     print(f"    OOS profitable: {wf['oos_profitable']}/{wf['oos_total']} windows")
     for r in wf["results"]:
@@ -354,6 +408,12 @@ def run_timeframe(tf_name):
         "timeframe": tf_name,
         "best_config": {k: v for k, v in bc.items() if not callable(v)},
         "config_label": " | ".join(parts),
+        "data_period": {
+            "start": data_start.isoformat(),
+            "end": data_end.isoformat(),
+        },
+        "screen_windows_used": screen_windows,
+        "wf_windows_used": wf_windows,
         "screening": s,
         "walkforward": wf,
         "all_results": {k: {kk: vv for kk, vv in v.items() if not callable(vv)}

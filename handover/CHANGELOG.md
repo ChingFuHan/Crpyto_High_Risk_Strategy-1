@@ -1,5 +1,33 @@
 # Handover / 智慧傳承
 
+## 2026-04-15 — Extended Walk-Forward To Latest Data (`WF5`)
+
+### What Changed
+- `scripts/comprehensive_sweep.py` and `scripts/mtf_sweep.py` now build screening / walk-forward windows from the latest available data instead of using fixed historical cutoffs
+- Added `scripts/run_sweep_timeframe.py` to run a single timeframe sweep from CLI
+- Refreshed `1h` / `15m` / `5m` data and reran full latest-data sweeps
+
+### New Validation Horizon
+- Data period: `2019-09-09` -> `2026-04-14`
+- Screening windows: yearly `2022` / `2023` / `2024` / `2025`
+- Walk-forward windows:
+  - `WF1`: `2021` train -> `2022H1` test
+  - `WF2`: `2022` train -> `2023H1` test
+  - `WF3`: `2023` train -> `2024H1` test
+  - `WF4`: `2024` train -> `2025H1` test
+  - `WF5`: `2025` train -> `2026-04-14` test
+
+### Result Snapshot
+- `1h`: OOS avg ret `+408.54%`, avg PF `1.298`, profitable windows `5/5`
+- `15m`: OOS avg ret `+263.39%`, avg PF `1.452`, profitable windows `4/5`
+- `5m`: OOS avg ret `+49.48%`, avg PF `1.206`, profitable windows `3/5`
+- `MTF`: OOS avg ret `+51.77%`, avg PF `1.216`, profitable windows `3/5`
+
+### Notes
+- This closes the prior gap where OOS stopped before the latest 2026 data
+- APY values in the session file are annualized from partial OOS windows and should be treated as comparison aids, not stable production forecasts
+- See `handover/SESSION_STRICT_LATEST_WF5_2026-04-15.md` for the full handover
+
 ## 2026-04-12 — Added 15m / 5m Raw History For Multi-Timeframe Work
 
 ### What Changed

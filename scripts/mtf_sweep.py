@@ -16,7 +16,7 @@ Approach:
 
 import json, sys, os, time, gc
 from pathlib import Path
-from datetime import datetime
+from datetime import date, datetime
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -74,19 +74,44 @@ TF_CONFIGS = {
     ),
 }
 
-# Walk-forward windows
-WF_WINDOWS = [
-    ("2021-01-01", "2021-12-31", "2022-01-01", "2022-06-30"),
-    ("2022-01-01", "2022-12-31", "2023-01-01", "2023-06-30"),
-    ("2023-01-01", "2023-12-31", "2024-01-01", "2024-06-30"),
-    ("2024-01-01", "2024-12-31", "2025-01-01", "2025-04-12"),
-]
+SCREEN_START_YEAR = 2022
+WF_TRAIN_START_YEAR = 2021
 
-SCREEN_WINDOWS = [
-    ("2022-01-01", "2022-12-31"),
-    ("2023-01-01", "2023-12-31"),
-    ("2024-01-01", "2024-12-31"),
-]
+
+def _to_date(value):
+    return datetime.fromisoformat(str(value)).date()
+
+
+def _last_completed_year(latest_date):
+    if latest_date.month == 12 and latest_date.day == 31:
+        return latest_date.year
+    return latest_date.year - 1
+
+
+def build_screen_windows(latest_date):
+    last_full_year = _last_completed_year(latest_date)
+    return [
+        (f"{year}-01-01", f"{year}-12-31")
+        for year in range(SCREEN_START_YEAR, last_full_year + 1)
+    ]
+
+
+def build_wf_windows(latest_date):
+    last_full_year = _last_completed_year(latest_date)
+    windows = []
+    for train_year in range(WF_TRAIN_START_YEAR, last_full_year + 1):
+        test_year = train_year + 1
+        test_start = date(test_year, 1, 1)
+        if latest_date < test_start:
+            break
+        test_end = min(date(test_year, 6, 30), latest_date)
+        windows.append((
+            f"{train_year}-01-01",
+            f"{train_year}-12-31",
+            test_start.isoformat(),
+            test_end.isoformat(),
+        ))
+    return windows
 
 
 def build_trend_arrays(prepared_data):
@@ -238,10 +263,18 @@ def main():
         print(f"  ERROR: {prepared_5m['error']}")
         return
 
+    data_start = _to_date(prepared_5m["timeline"][0])
+    data_end = _to_date(prepared_5m["timeline"][-1])
+    screen_windows = build_screen_windows(data_end)
+    wf_windows = build_wf_windows(data_end)
+    print(f"  Data period: {data_start.isoformat()} ~ {data_end.isoformat()}")
+    print(f"  Screening windows: {', '.join(f'{s}~{e}' for s, e in screen_windows)}")
+    print(f"  WF windows: {', '.join(f'{tr_s}~{tr_e}->{te_s}~{te_e}' for tr_s, tr_e, te_s, te_e in wf_windows)}")
+
     # ── Step 3: Screening on multiple windows ──
-    print(f"\n  --- SCREENING: 3-window validation ---")
+    print(f"\n  --- SCREENING: {len(screen_windows)}-window validation ---")
     pfs, rets, trades_all = [], [], []
-    for s, e in SCREEN_WINDOWS:
+    for s, e in screen_windows:
         raw = run_mtf_backtest(cfg_5m, prepared_5m, trend_1h, trend_15m, s, e)
         m = extract(raw)
         pfs.append(m["pf"])
@@ -257,7 +290,7 @@ def main():
     # Also run baseline 5m WITHOUT MTF filter for comparison
     print(f"\n  --- BASELINE: 5m only (no MTF filter) ---")
     pfs_base, rets_base = [], []
-    for s, e in SCREEN_WINDOWS:
+    for s, e in screen_windows:
         sl = Backtester.slice_prepared(prepared_5m, s, e)
         bt = Backtester(BacktestConfig(**cfg_5m))
         raw = bt.run_prepared(sl)
@@ -277,7 +310,7 @@ def main():
     print(f"\n  --- WALK-FORWARD VALIDATION ---")
     wf_results = []
     test_rets, test_pfs = [], []
-    for i, (tr_s, tr_e, te_s, te_e) in enumerate(WF_WINDOWS, 1):
+    for i, (tr_s, tr_e, te_s, te_e) in enumerate(wf_windows, 1):
         # Train window (MTF)
         train_raw = run_mtf_backtest(cfg_5m, prepared_5m, trend_1h, trend_15m, tr_s, tr_e)
         train_m = extract(train_raw)
@@ -314,6 +347,12 @@ def main():
         "timeframe": "mtf_1h_15m_5m",
         "best_config": cfg_5m,
         "config_label": "MTF 1h+15m+5m trend alignment",
+        "data_period": {
+            "start": data_start.isoformat(),
+            "end": data_end.isoformat(),
+        },
+        "screen_windows_used": screen_windows,
+        "wf_windows_used": wf_windows,
         "screening": {
             "avg_pf": avg_pf,
             "avg_ret": avg_ret,
